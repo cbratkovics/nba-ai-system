@@ -1,0 +1,24 @@
+# Large model files
+model_artifacts/*.joblib
+production_models/**/*.joblib
+
+# Large notebook files
+**/NBA_API_Data_Extract*.ipynb
+
+# Jupyter checkpoint files
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Data files (keep smaller ones, exclude large ones)
+data/raw/*_large.parquet
+
+# OS files
+.DS_Store
+*.log
+
+# Large output files
+*.joblib

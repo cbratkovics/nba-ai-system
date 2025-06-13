@@ -1,0 +1,96 @@
+NBA PLAYER PERFORMANCE HYPOTHESIS TESTING REPORT
+============================================================
+Generated on: 2025-06-09 18:12:08
+
+
+HYPOTHESIS 1: REST DAYS IMPACT ON SHOOTING EFFICIENCY
+--------------------------------------------------
+Sample Sizes:
+  Well Rested: 64,077 observations
+  Not Well Rested: 12,166 observations
+
+Descriptive Statistics:
+  Well Rested Mean: 0.4708
+  Not Well Rested Mean: 0.4649
+  Difference: 0.0058
+
+Test Statistics:
+  T-statistic: 3.3998
+  P-value (two-tailed): 0.000675
+  Effect Size (Cohen's d): 0.0336
+
+Conclusion (α = 0.05):
+  Reject H0
+  Effect size interpretation: negligible
+
+NBA Value & Practical Significance:
+  Rest impacts shooting efficiency by 0.6% on average.
+  This suggests load management strategies may have measurable benefits.
+
+
+HYPOTHESIS 2: HOME VS. AWAY PERFORMANCE DIFFERENTIALS
+--------------------------------------------------
+Sample Sizes:
+  Home Games: 84,704 observations
+  Away Games: 84,457 observations
+
+Descriptive Statistics:
+  Home Mean: 7.0719
+  Away Mean: 6.9616
+  Difference: 0.1103
+
+Test Statistics:
+  T-statistic: 2.5740
+  P-value (two-tailed): 0.010054
+  Effect Size (Cohen's d): 0.0125
+
+Conclusion (α = 0.05):
+  Reject H0
+  Effect size interpretation: negligible
+
+NBA Value & Practical Significance:
+  Home court advantage results in 0.11 additional points per game.
+  This quantifies the value of playing at home for individual players.
+
+
+HYPOTHESIS 3: EVOLUTION OF 3-POINT ATTEMPT RATES
+--------------------------------------------------
+Sample Sizes:
+  Season 2022: 17,464 observations
+  Season 2024: 17,201 observations
+
+Descriptive Statistics:
+  Season 2022 Mean: 5.1426
+  Season 2024 Mean: 5.7030
+  Difference: 0.5604
+
+Test Statistics:
+  T-statistic: 14.7119
+  P-value (one-tailed): 0.000000
+  Effect Size (Cohen's d): 0.1581
+
+Conclusion (α = 0.05):
+  Reject H0
+  Effect size interpretation: negligible
+
+NBA Value & Practical Significance:
+  3-point attempts increased by 0.56 per 36 minutes between seasons.
+  This confirms the continued evolution toward perimeter-oriented offense.
+
+
+OVERALL SUMMARY
+------------------------------
+Tests conducted: 3
+Significant results: 3
+Success rate: 100.0%
+
+Key findings from significant results:
+  • Hypothesis 1: Rest Days Impact on Shooting Efficiency
+  • Hypothesis 2: Home vs. Away Performance Differentials
+  • Hypothesis 3: Evolution of 3-Point Attempt Rates
+
+Methodological Notes:
+	All tests used α = 0.05 significance level
+	Both parametric (t-test) and non-parametric (Mann-Whitney U) tests conducted
+	Effect sizes calculated using Cohen's d for practical significance assessment
+	Assumptions testing included normality and equal variance checks

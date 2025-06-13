@@ -1,0 +1,20 @@
+{
+  "pts": {
+    "best_model": "random_forest",
+    "r2_score": 0.9486466387504175,
+    "mae": 1.1271952113301953,
+    "predictability": "High"
+  },
+  "reb": {
+    "best_model": "random_forest",
+    "r2_score": 0.7232798905165345,
+    "mae": 1.042779025696831,
+    "predictability": "High"
+  },
+  "ast": {
+    "best_model": "gradient_boosting",
+    "r2_score": 0.7137865875177304,
+    "mae": 0.7494118984970248,
+    "predictability": "High"
+  }
+}
