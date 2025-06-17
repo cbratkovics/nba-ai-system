@@ -1,0 +1,50 @@
+{
+  "pts": {
+    "top_5_features": [
+      "minutes_played",
+      "fga_per_min",
+      "fta_per_min",
+      "minutes_played_x_rest_days",
+      "sufficient_rest_x_minutes_played"
+    ],
+    "importance_scores": [
+      0.16657406894807245,
+      0.15282533883564958,
+      0.1022347857727314,
+      0.09357754845367466,
+      0.09255001481041827
+    ]
+  },
+  "reb": {
+    "top_5_features": [
+      "minutes_played",
+      "minutes_played_x_rest_days",
+      "sufficient_rest_x_minutes_played",
+      "fga_per_min",
+      "pf"
+    ],
+    "importance_scores": [
+      0.1610902601829839,
+      0.10744661334690209,
+      0.09491447428249662,
+      0.07089738169644892,
+      0.07013746218863702
+    ]
+  },
+  "ast": {
+    "top_5_features": [
+      "ast_outlier_flag",
+      "minutes_played",
+      "sufficient_rest_x_minutes_played",
+      "minutes_played_x_rest_days",
+      "turnover"
+    ],
+    "importance_scores": [
+      0.2674460838191515,
+      0.13962905454782285,
+      0.08457831838362166,
+      0.08348209354315643,
+      0.05313849409855268
+    ]
+  }
+}
