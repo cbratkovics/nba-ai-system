@@ -1,9 +1,5 @@
 # Large model files
-model_artifacts/*.joblib
-production_models/**/*.joblib
-
-# Large notebook files
-**/NBA_API_Data_Extract*.ipynb
+outputs/artifacts/*.joblib
 
 # Jupyter checkpoint files
 .ipynb_checkpoints/
@@ -13,12 +9,76 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Data files (keep smaller ones, exclude large ones)
-data/raw/*_large.parquet
-
 # OS files
 .DS_Store
 *.log
 
 # Large output files
 *.joblib
+
+# C extensions
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Environment and package management
+.env
+.venv/
+env/
+venv/
+pip-log.txt
+poetry.lock
+
+# Python egg files
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Data files
+*.parquet
+*.csv
+*.tsv
+*.log
+*.tmp
+*.dat
+
+# Jupyter outputs
+*.nbconvert.ipynb
+
+# MacOS metadata
+.DS_Store
+
+# Reports, plots, and exports
+reports/
+artifacts/
+outputs/
+visuals/
+
