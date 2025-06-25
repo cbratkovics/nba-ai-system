@@ -48,7 +48,7 @@ class NBAHypothesisTester:
         feature_engineered = self._check_feature_engineering_status()
         
         if feature_engineered:
-            print("✓ Data appears to be feature engineered already")
+            print("Data appears to be feature engineered already")
             # Map feature engineered columns to expected names
             self._map_feature_engineered_columns()
         else:
@@ -90,7 +90,7 @@ class NBAHypothesisTester:
         for feature_col, expected_col in column_mapping.items():
             if feature_col in self.player_stats.columns and expected_col not in self.player_stats.columns:
                 self.player_stats[expected_col] = self.player_stats[feature_col]
-                print(f"✓ Mapped {feature_col} -> {expected_col}")
+                print(f"Mapped {feature_col} -> {expected_col}")
     
     def _verify_required_columns(self):
         """Verify that all required columns for hypothesis testing exist."""

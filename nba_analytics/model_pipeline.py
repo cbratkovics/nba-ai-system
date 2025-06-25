@@ -104,18 +104,13 @@ class DataLoader:
         
     def load_and_validate(self, data_path: str) -> pd.DataFrame:
         """Load data with comprehensive validation."""
-        print("LOADING AND VALIDATING NBA DATASET")
-        print("-" * 45)
+        print("Loading NBA dataset...")
         
         try:
             df = pd.read_parquet(data_path)
-            print(f"Successfully loaded data from {data_path}")
-            print(f"Shape: {df.shape}")
+            print(f"Dataset loaded: {df.shape[0]:,} records, {df.shape[1]} features")
             
             self._validate_data_quality(df)
-            self._validate_target_variables(df)
-            self._validate_date_consistency(df)
-            
             return df
             
         except Exception as e:
@@ -124,42 +119,16 @@ class DataLoader:
     
     def _validate_data_quality(self, df: pd.DataFrame) -> None:
         """Validate overall data quality."""
-        empty_cols = df.columns[df.isnull().all()].tolist()
-        if empty_cols:
-            print(f"Found {len(empty_cols)} completely empty columns")
-        
-        duplicates = df.duplicated().sum()
-        if duplicates > 0:
-            print(f"Found {duplicates} duplicate rows")
-        
-        memory_mb = df.memory_usage(deep=True).sum() / 1024**2
-        print(f"Data quality check complete. Memory usage: {memory_mb:.1f} MB")
-    
-    def _validate_target_variables(self, df: pd.DataFrame) -> None:
-        """Validate target variables are present and reasonable."""
+        # Check for required target variables
         required_targets = ['pts', 'reb', 'ast']
         missing_targets = [t for t in required_targets if t not in df.columns]
         
         if missing_targets:
             raise ValueError(f"Missing target variables: {missing_targets}")
         
-        for target in required_targets:
-            if target in df.columns:
-                max_val = df[target].max()
-                min_val = df[target].min()
-                if max_val > 200 or min_val < 0:
-                    print(f"Unusual {target} values: min={min_val}, max={max_val}")
-        
-        print(f"All target variables validated: {required_targets}")
-    
-    def _validate_date_consistency(self, df: pd.DataFrame) -> None:
-        """Validate date column if present."""
+        # Check date range if available
         if 'game_date' in df.columns:
             df['game_date'] = pd.to_datetime(df['game_date'], errors='coerce')
-            invalid_dates = df['game_date'].isnull().sum()
-            if invalid_dates > 0:
-                print(f"Found {invalid_dates} invalid dates")
-            
             date_range = df['game_date'].max() - df['game_date'].min()
             print(f"Date range: {date_range.days} days")
 
@@ -196,7 +165,6 @@ class AdvancedFeatureEngineer:
                 except:
                     continue
         
-        print(f"Created {len(created_features)} selective interaction features")
         return df_interactions, created_features
     
     def create_position_specific_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -234,8 +202,7 @@ class SmartFeatureSelector:
         
     def select_features(self, X: pd.DataFrame, y: pd.Series, target_name: str) -> pd.DataFrame:
         """Apply comprehensive feature selection."""
-        print(f"Smart feature selection for {target_name.upper()}")
-        print("-" * 40)
+        print(f"Selecting features for {target_name.upper()}...")
         
         X_filtered = self._remove_low_variance_features(X)
         X_filtered = self._remove_correlated_features(X_filtered)
@@ -244,7 +211,7 @@ class SmartFeatureSelector:
         
         self.selected_features_[target_name] = X_selected.columns.tolist()
         
-        print(f"Feature selection complete: {X.shape[1]} -> {X_selected.shape[1]} features")
+        print(f"Feature selection: {X.shape[1]} -> {X_selected.shape[1]} features")
         return X_selected
     
     def _remove_low_variance_features(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -287,7 +254,6 @@ class SmartFeatureSelector:
         ]
         
         if to_drop:
-            print(f"Removing {len(to_drop)} highly correlated features")
             X = X.drop(columns=to_drop)
         
         return X
@@ -302,9 +268,7 @@ class SmartFeatureSelector:
         all_leakage = list(set(correlation_leakage + calculated_leakage))
         
         if all_leakage:
-            print(f"Removing {len(all_leakage)} potential leakage features")
-            print(f"Correlation-based: {len(correlation_leakage)}")
-            print(f"Calculated features: {len(calculated_leakage)}")
+            print(f"Removed {len(all_leakage)} potential leakage features")
             X = X.drop(columns=all_leakage, errors='ignore')
         
         return X
@@ -333,11 +297,10 @@ class SmartFeatureSelector:
             non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
             final_cols = list(selected_numeric_cols) + list(non_numeric_cols)
             
-            print(f"Selected {len(selected_numeric_cols)} numeric features via {self.config.feature_selection_method}")
             return X[final_cols]
             
         except Exception as e:
-            print(f"Feature selection failed: {e}. Using all features.")
+            print(f"Feature selection failed, using all features")
             return X
 
 
@@ -353,21 +316,17 @@ class OptimizedModelPipeline:
         
     def prepare_model_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, pd.Series]]:
         """Prepare features and targets with comprehensive preprocessing."""
-        print("PREPARING MODEL DATA")
-        print("-" * 30)
+        print("Preparing model data...")
         
         target_vars = ['pts', 'reb', 'ast']
         
-        print("Comprehensive data leakage detection...")
-        
-        # Identify and remove obvious leakage columns
+        # Identify and remove leakage columns
         direct_leakage = [
             'fgm', 'fga', 'fg_pct', 'fg3m', 'fg3a', 'fg3_pct',
             'ftm', 'fta', 'ft_pct', 'oreb', 'dreb',
         ]
         
         calculated_leakage = DataLeakageDetector.detect_calculated_leakage_features(df.columns.tolist())
-        print(f"Found {len(calculated_leakage)} calculated leakage features")
         
         identifier_cols = ['game_id', 'player_id', 'game_date', 'game_season', 'team_id', 'player_team_id']
         id_cols = [col for col in df.columns if 'id' in col.lower()]
@@ -375,15 +334,12 @@ class OptimizedModelPipeline:
         cols_to_drop = target_vars + direct_leakage + calculated_leakage + identifier_cols + id_cols
         cols_to_drop = list(set([col for col in cols_to_drop if col in df.columns]))
         
-        print(f"Removing {len(cols_to_drop)} leakage/identifier/ID columns")
+        print(f"Removed {len(cols_to_drop)} leakage/identifier columns")
         
         X = df.drop(columns=cols_to_drop, errors='ignore')
         y = {target: df[target] for target in target_vars if target in df.columns}
         
-        print(f"After leakage removal: {X.shape[1]} features remaining")
-        
         # Early feature selection
-        print("Applying early feature selection...")
         X = self._apply_early_feature_selection(X, y['pts'])
         
         # Advanced feature engineering
@@ -400,35 +356,27 @@ class OptimizedModelPipeline:
             unique_count = X[col].nunique()
             if unique_count <= 10:
                 essential_categorical.append(col)
-            else:
-                print(f"Dropping high-cardinality categorical: {col} ({unique_count} unique values)")
         
         X = X.drop(columns=[col for col in categorical_cols if col not in essential_categorical])
         
         if len(essential_categorical) > 0:
             X = pd.get_dummies(X, columns=essential_categorical, drop_first=True)
-            print(f"Encoded {len(essential_categorical)} essential categorical variables")
         
         # Final leakage check
-        print("Final correlation-based leakage check...")
         for target_name, target_series in y.items():
             high_corr_features = DataLeakageDetector.detect_target_leakage(X, target_series, correlation_threshold=0.90)
             if high_corr_features:
-                print(f"Removing {len(high_corr_features)} highly correlated features for {target_name}")
                 X = X.drop(columns=high_corr_features, errors='ignore')
         
         X = X.fillna(0)
         
-        print(f"Data preparation complete: {X.shape}")
+        print(f"Final dataset: {X.shape[0]:,} records, {X.shape[1]} leak-free features")
         print(f"Created {len(interaction_features)} interaction features")
-        print(f"Final feature count: {X.shape[1]} (leak-free)")
         
         return X, y
     
     def _apply_early_feature_selection(self, X: pd.DataFrame, y_reference: pd.Series, max_features: int = 50) -> pd.DataFrame:
         """Apply early feature selection before feature engineering."""
-        print(f"Early selection: {X.shape[1]} -> targeting <={max_features} features")
-        
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
         
@@ -450,18 +398,15 @@ class OptimizedModelPipeline:
             selected_numeric = [col for col, _ in correlations[:max_features]]
             
             final_cols = selected_numeric + list(non_numeric_cols)
-            print(f"Selected {len(selected_numeric)} numeric + {len(non_numeric_cols)} categorical features")
             
             return X[final_cols]
             
         except Exception as e:
-            print(f"Early selection failed: {e}, keeping all features")
             return X
     
     def create_time_aware_split(self, df: pd.DataFrame, X: pd.DataFrame, y: Dict[str, pd.Series]) -> Tuple:
         """Create chronologically aware train/validation/test splits."""
-        print("CREATING TIME-AWARE DATA SPLITS")
-        print("-" * 40)
+        print("Creating time-aware data splits...")
         
         if 'game_date' in df.columns:
             df_sorted = df.sort_values('game_date')
@@ -475,13 +420,9 @@ class OptimizedModelPipeline:
             val_idx = sorted_indices[train_end:val_end]
             test_idx = sorted_indices[val_end:]
             
-            print(f"Chronological split:")
-            print(f"Train: {len(train_idx):,} samples")
-            print(f"Validation: {len(val_idx):,} samples") 
-            print(f"Test: {len(test_idx):,} samples")
+            print(f"Train: {len(train_idx):,} | Validation: {len(val_idx):,} | Test: {len(test_idx):,}")
             
         else:
-            print("No date column found, using random split")
             indices = X.index
             train_val_idx, test_idx = train_test_split(
                 indices, test_size=self.config.test_size, random_state=self.config.random_state
@@ -562,15 +503,13 @@ class OptimizedModelPipeline:
     def train_models(self, X_train: pd.DataFrame, X_val: pd.DataFrame, 
                     y_train: Dict, y_val: Dict) -> None:
         """Train and validate models with proper hyperparameter tuning."""
-        print("TRAINING OPTIMIZED MODELS")
-        print("-" * 35)
+        print("Training models...")
         
         model_configs = self.get_optimized_models()
         cv_strategy = TimeSeriesSplit(n_splits=3)
         
         for target in y_train.keys():
-            print(f"Training models for {target.upper()}")
-            print("-" * 30)
+            print(f"\nTraining {target.upper()} models:")
             
             X_train_selected = self.feature_selector.select_features(X_train, y_train[target], target)
             selected_features = X_train_selected.columns
@@ -580,8 +519,6 @@ class OptimizedModelPipeline:
             self.results[target] = {}
             
             for model_name, config in model_configs.items():
-                print(f"Training {model_name}...")
-                
                 try:
                     if config['use_scaling']:
                         scaler = RobustScaler()
@@ -616,8 +553,6 @@ class OptimizedModelPipeline:
                         cv_score = -grid_search.best_score_
                         
                     elif model_name in ['gradient_boosting', 'random_forest']:
-                        print(f"Using efficient training for speed...")
-                        
                         if model_name == 'random_forest':
                             rf_configs = [
                                 {'n_estimators': 50, 'max_depth': 10, 'min_samples_split': 10},
@@ -689,25 +624,20 @@ class OptimizedModelPipeline:
                         predictions=y_val_pred
                     )
                     
-                    print(f"CV MAE: {cv_score:.3f} | Val MAE: {val_mae:.3f} | Val R2: {val_r2:.3f}")
-                    if best_params:
-                        print(f"Best params: {best_params}")
+                    print(f"  {model_name}: R2={val_r2:.3f} | MAE={val_mae:.3f}")
                     
                 except Exception as e:
-                    print(f"Error: {e}")
                     continue
         
-        print("Model training complete!")
+        print("Model training complete")
     
     def evaluate_on_test(self, X_test: pd.DataFrame, y_test: Dict) -> Dict:
         """Final evaluation on test set."""
-        print("FINAL TEST SET EVALUATION")
-        print("-" * 35)
+        print("\nFinal test evaluation:")
         
         test_results = {}
         
         for target in y_test.keys():
-            print(f"{target.upper()} Test Results:")
             test_results[target] = {}
             
             selected_features = self.feature_selector.selected_features_[target]
@@ -740,11 +670,16 @@ class OptimizedModelPipeline:
                         'predictions': y_pred
                     }
                     
-                    print(f"{model_name}: MAE={mae:.3f}, RMSE={rmse:.3f}, R2={r2:.3f}")
-                    
                 except Exception as e:
-                    print(f"{model_name} error: {e}")
                     continue
+        
+        # Print best results for each target
+        print("\nBest model performance:")
+        for target in test_results.keys():
+            best_model = max(test_results[target], key=lambda x: test_results[target][x]['r2'])
+            best_metrics = test_results[target][best_model]
+            print(f"  {target.upper()}: {best_model.replace('_', ' ').title()} "
+                  f"(R2={best_metrics['r2']:.3f}, MAE={best_metrics['mae']:.2f})")
         
         return test_results
 
@@ -757,13 +692,11 @@ class ModelInterpreter:
         
     def analyze_feature_importance(self, X_train: pd.DataFrame, y_train: Dict) -> Dict:
         """Comprehensive feature importance analysis."""
-        print("ADVANCED FEATURE IMPORTANCE ANALYSIS")
-        print("-" * 45)
+        print("Analyzing feature importance...")
         
         importance_results = {}
         
         for target in y_train.keys():
-            print(f"Analyzing {target.upper()} feature importance:")
             importance_results[target] = {}
             
             selected_features = self.pipeline.feature_selector.selected_features_[target]
@@ -802,21 +735,15 @@ class ModelInterpreter:
                     }).sort_values('importance', ascending=False)
                     
                     importance_results[target][model_name] = feature_importance
-                    
-                    print(f"{model_name} ({importance_type}) - Top 5:")
-                    for _, row in feature_importance.head(5).iterrows():
-                        print(f"  {row['feature']}: {row['importance']:.4f}")
                         
                 except Exception as e:
-                    print(f"Error analyzing {model_name}: {e}")
                     continue
         
         return importance_results
     
     def create_business_insights(self, importance_results: Dict, test_results: Dict) -> Dict:
         """Generate actionable business insights."""
-        print("GENERATING BUSINESS INSIGHTS")
-        print("-" * 35)
+        print("Generating business insights...")
         
         insights = {
             'model_performance': {},
@@ -906,8 +833,7 @@ class ProductionModelManager:
         
     def prepare_for_deployment(self, test_results: Dict) -> None:
         """Prepare the best models for production deployment."""
-        print("PREPARING MODELS FOR DEPLOYMENT")
-        print("-" * 40)
+        print("Preparing production models...")
         
         for target in test_results.keys():
             best_model_name = max(test_results[target], key=lambda x: test_results[target][x]['r2'])
@@ -926,8 +852,6 @@ class ProductionModelManager:
                 'features': selected_features,
                 'metrics': best_metrics
             }
-            
-            print(f"{target.upper()}: {best_model_name} (R2={best_metrics['r2']:.3f})")
     
     def create_prediction_function(self) -> callable:
         """Create a single function for making predictions on new data."""
@@ -955,11 +879,9 @@ class ProductionModelManager:
             
             for target, deployment_info in self.deployment_models.items():
                 try:
-                    available_features = [f for f in deployment_info['features'] if f in input_df.columns]
-                    missing_features = [f for f in deployment_info['features'] if f not in input_df.columns]
-                    
-                    for feature in missing_features:
-                        input_df[feature] = 0
+                    for feature in deployment_info['features']:
+                        if feature not in input_df.columns:
+                            input_df[feature] = 0
                     
                     X_input = input_df[deployment_info['features']]
                     
@@ -974,16 +896,15 @@ class ProductionModelManager:
                     
                 except Exception as e:
                     predictions[target] = 0.0
-                    print(f"Warning: Error predicting {target}: {e}")
             
             return predictions
         
         return predict_player_performance
     
-    def save_production_artifacts(self, output_dir: str = "production_models") -> None:
+    def save_production_artifacts(self, output_dir: str = "../outputs/artifacts") -> None:
         """Save all production artifacts."""
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(exist_ok=True, parents=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -1010,7 +931,7 @@ class ProductionModelManager:
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2, default=str)
         
-        print(f"Production artifacts saved to {output_path}")
+        print(f"Production artifacts saved")
         return output_path
 
 
@@ -1018,8 +939,7 @@ def validate_model_results(test_results: Dict, min_r2_threshold: float = 0.3) ->
     """Validate that model results meet minimum performance criteria."""
     validation_passed = True
     
-    print("VALIDATING MODEL RESULTS")
-    print("-" * 30)
+    print("Validating model performance...")
     
     for target, models in test_results.items():
         best_r2 = max(model_metrics['r2'] for model_metrics in models.values())
@@ -1030,19 +950,14 @@ def validate_model_results(test_results: Dict, min_r2_threshold: float = 0.3) ->
         else:
             print(f"PASS: {target.upper()} best R2 = {best_r2:.3f}")
     
-    if validation_passed:
-        print("All models meet minimum performance criteria")
-    else:
-        print("Some models below performance threshold - consider retraining")
-    
     return validation_passed
 
 
 def save_model_artifacts(pipeline: OptimizedModelPipeline, test_results: Dict, 
-                        insights: Dict, output_dir: str = "model_artifacts") -> None:
+                        insights: Dict, output_dir: str = "../outputs/artifacts") -> None:
     """Save all model artifacts for future use."""
     output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
+    output_path.mkdir(exist_ok=True, parents=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
@@ -1064,11 +979,7 @@ def save_model_artifacts(pipeline: OptimizedModelPipeline, test_results: Dict,
     with open(features_file, 'w') as f:
         json.dump(feature_lists, f, indent=2)
     
-    print(f"Model artifacts saved to {output_path}")
-    print(f"Files created:")
-    print(f"  - {pipeline_file.name} (trained pipeline)")
-    print(f"  - {results_file.name} (results and insights)")
-    print(f"  - {features_file.name} (selected features)")
+    print(f"Model artifacts saved")
 
 
 def run_nba_modeling_pipeline(data_path: str = "data/processed/final_engineered_nba_data.parquet") -> Tuple:
@@ -1079,7 +990,7 @@ def run_nba_modeling_pipeline(data_path: str = "data/processed/final_engineered_
         Tuple of (pipeline, test_results, insights, production_manager)
     """
     print("NBA PLAYER PERFORMANCE MODELING PIPELINE")
-    print("=" * 65)
+    print("=" * 50)
     
     config = ModelConfig(
         test_size=0.2,
@@ -1112,34 +1023,24 @@ def run_nba_modeling_pipeline(data_path: str = "data/processed/final_engineered_
     production_manager.prepare_for_deployment(test_results)
     production_manager.save_production_artifacts()
     
+    print("\nPIPELINE COMPLETE")
+    print("=" * 20)
+    
     return pipeline, test_results, insights, production_manager
 
 
 if __name__ == "__main__":
     try:
-        print("Starting NBA Player Performance Modeling Pipeline...")
-        
         pipeline, test_results, insights, production_manager = run_nba_modeling_pipeline()
         
         validation_passed = validate_model_results(test_results)
         
         save_model_artifacts(pipeline, test_results, insights)
         
-        print("NBA MODELING PIPELINE COMPLETE!")
-        print("=" * 55)
-        print("ACHIEVEMENTS:")
-        print("- Models trained with proper validation")
-        print("- Data leakage prevention implemented")
-        print("- Feature selection and engineering optimized")
-        print("- Business insights generated")
-        print("- Production deployment framework ready")
-        
-        print("FINAL PERFORMANCE SUMMARY:")
+        print("\nFINAL PERFORMANCE SUMMARY:")
         for target, performance in insights['model_performance'].items():
             print(f"  {target.upper()}: {performance['best_model'].replace('_', ' ').title()} "
                   f"(R2={performance['r2']:.3f}, MAE={performance['mae']:.2f})")
         
     except Exception as e:
         print(f"Pipeline execution error: {e}")
-        import traceback
-        traceback.print_exc()

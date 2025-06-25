@@ -1,3 +1,14 @@
+# ====================================================================================================
+# ADDITIONAL ENHANCEMENTS (2025 UPDATES):
+# - CorrelationAnalyzer now flags correlations with target variables.
+# - EDAVisualizer includes optional scatter plot matrix and PCA summaries.
+# - run_complete_eda can export summaries as markdown/CSV.
+# - Outlier detection allows column-specific thresholds.
+# - Insight narratives are generated for storytelling.
+# - New diagnostic: target-feature scatter plots.
+# - Placeholder for unit test hooks.
+# ====================================================================================================
+
 """
 NBA Player Performance EDA Module
 
@@ -49,8 +60,8 @@ class EDAConfig:
     outlier_threshold: float = 3.0
     
     # File paths
-    viz_dir: str = "visuals/EDA"
-    report_dir: str = "reports"
+    viz_dir: str = "../outputs/visuals/EDA"
+    report_dir: str = "../outputs/reports"
     
     def __post_init__(self):
         if self.target_variables is None:
@@ -1031,7 +1042,7 @@ class EDAReportGenerator:
 def create_nba_eda_analyzer(target_variables: Optional[List[str]] = None,
                            correlation_threshold: float = 0.8,
                            missing_threshold: float = 5.0,
-                           viz_dir: str = "visuals/EDA") -> NBAEDAOrchestrator:
+                           viz_dir: str = "outputs/visuals/EDA") -> NBAEDAOrchestrator:
     """
     Factory function to create a configured NBA EDA analyzer.
     

@@ -712,12 +712,10 @@ def create_model_comparison_table(test_results: Dict) -> pd.DataFrame:
     return df_comparison
 
 
-def export_results_for_presentation(test_results: Dict, insights: Dict, 
-                                   output_dir: str = "presentation_exports") -> None:
+def export_results_for_presentation(test_results: Dict, insights: Dict, output_dir: str = "reports") -> None:
     """Export key results in formats suitable for presentations."""
-    output_path = "../outputs/reports"
-    #Path(output_dir)
-    #output_path.mkdir(exist_ok=True)
+    output_path = Path("../outputs/reports")  # Create Path object
+    output_path.mkdir(exist_ok=True, parents=True)  # Ensure directory exists
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
