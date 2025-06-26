@@ -939,10 +939,10 @@ def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict,
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    pipeline_file = output_path / f"nba_pipeline_{timestamp}.joblib"
+    pipeline_file = output_path / "nba_pipeline.joblib"
     joblib.dump(pipeline, pipeline_file)
     
-    results_file = output_path / f"model_results_{timestamp}.joblib"
+    results_file = output_path / "model_results.joblib"
     joblib.dump({
         'test_results': test_results,
         'insights': insights,
@@ -953,7 +953,7 @@ def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict,
     for target in pipeline.feature_selector.selected_features_:
         feature_lists[target] = pipeline.feature_selector.selected_features_[target]
     
-    features_file = output_path / f"selected_features_{timestamp}.json"
+    features_file = output_path / "selected_features.json"
     with open(features_file, 'w') as f:
         json.dump(feature_lists, f, indent=2)
     
