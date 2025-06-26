@@ -2,10 +2,13 @@
 
 <div align="center">
 
-![NBA Analytics](https://img.shields.io/badge/NBA-Analytics-orange?style=for-the-badge&logo=basketball)
-![Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python)
-![Machine Learning](https://img.shields.io/badge/ML-Production%20Ready-green?style=for-the-badge&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-Complete-success?style=for-the-badge)
+![NBA](https://img.shields.io/badge/NBA-gray?style=for-the-badge)
+![ANALYTICS](https://img.shields.io/badge/ANALYTICS-orange?style=for-the-badge)
+![PYTHON](https://img.shields.io/badge/PYTHON-blue?style=for-the-badge)
+![3.8+](https://img.shields.io/badge/3.8+-blue?style=for-the-badge)
+![ML](https://img.shields.io/badge/ML-orange?style=for-the-badge)
+![PRODUCTION READY](https://img.shields.io/badge/PRODUCTION%20READY-brightgreen?style=for-the-badge)
+
 
 *Production-ready NBA player performance prediction with quantified business impact and statistical validation*
 
@@ -58,9 +61,6 @@
 
 ### 🎯 **Model Performance (Production-Validated)**
 
-<details>
-<summary><b>📈 Exceptional Performance Metrics</b></summary>
-
 | Target | Best Model | Accuracy (R²) | Mean Error | Quality Assessment | Sample Size |
 |--------|------------|---------------|------------|-------------------|-------------|
 | **Points** | Random Forest | **94.6%** | ±1.2 pts | Exceptional - Deployment Ready | 33,971 games |
@@ -69,7 +69,6 @@
 
 *All models validated on 20% holdout test set with time-series cross-validation*
 
-</details>
 
 ### 🔬 **Statistical Validation Results**
 
