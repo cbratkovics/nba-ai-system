@@ -25,7 +25,7 @@
   "removed_columns": [
     "min"
   ],
-  "cleaning_timestamp": "2025-06-24T22:00:38.321513",
+  "cleaning_timestamp": "2025-06-25T16:08:45.227774",
   "config_used": {
     "max_minutes_per_game": 60.0,
     "max_reasonable_points": 100,
