@@ -1,0 +1,4 @@
+Target,Best Model,Accuracy (R²),Typical Error (MAE),95% Confidence Interval,RMSE,MAPE (%),Reliability Score,Sample Size,Within 1σ (%)
+PTS,Random Forest,0.946,±1.15,±1.73,2.02,46072224223653752.0%,97.3%,0,68.0%
+REB,Random Forest,0.719,±1.05,±1.57,1.80,41536485997999912.0%,84.8%,0,68.0%
+AST,Gradient Boosting,0.714,±0.75,±1.12,1.27,69918784429896712.0%,84.5%,0,68.0%

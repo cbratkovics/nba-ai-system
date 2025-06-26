@@ -1,84 +1,37 @@
-# Large model files
-outputs/artifacts/*.joblib
-
-# Jupyter checkpoint files
-.ipynb_checkpoints/
-
-# Python cache
+# Python bytecode and environment
 __pycache__/
 *.pyc
-*.pyo
-
-# OS files
-.DS_Store
-*.log
-
-# Large output files
-*.joblib
-
-# C extensions
-*.so
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# VSCode settings
-.vscode/
-
-# PyCharm settings
-.idea/
-
-# Environment and package management
-.env
-.venv/
+*.pyd
+.Python
 env/
 venv/
-pip-log.txt
-poetry.lock
-
-# Python egg files
-*.egg
-*.egg-info/
-dist/
-build/
-eggs/
-parts/
-sdist/
-develop-eggs/
-.installed.cfg
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
+.ipynb_checkpoints/
 .pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
+.coverage
+htmlcov/
+.nox/
+.eggs/
+*.egg-info/
+.mypy_cache/
 
-# Data files
-*.parquet
-*.csv
-*.tsv
-*.log
-*.tmp
-*.dat
+# Exclude all parquet files from data/processed and data/raw
+/data/processed/*.parquet
+/data/raw/*.parquet
 
-# Jupyter outputs
-*.nbconvert.ipynb
+# Exclude general large data file types from anywhere
+*.pkl
+*.h5
+*.npy
 
-# MacOS metadata
+# Model artifacts
+/outputs/artifacts/*.joblib 
+
+# IDE and OS generated files
 .DS_Store
-
-# Reports, plots, and exports
-reports/
-artifacts/
-outputs/
-visuals/
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
