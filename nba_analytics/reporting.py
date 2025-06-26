@@ -1,17 +1,16 @@
 """
 NBA Player Performance Prediction - Professional Visualization Module
 
-ENHANCED VERSION with Smart Annotation Positioning
+ENHANCED VERSION with External Annotation Areas
 Key Improvements Applied:
-1. Smart positioning system to avoid visual conflicts
-2. Chart type detection for optimal placement
-3. Dynamic position calculation based on data density
-4. Improved visual balance and readability
-5. Colorblind-friendly professional palette for accessibility
-6. Enhanced text hierarchy and readability for presentations
+1. External annotation zones completely outside chart areas
+2. Figure-level text positioning instead of axes-level
+3. Dedicated annotation zones for hero and stakeholder dashboards
+4. Improved space allocation with adjusted GridSpec layouts
+5. Colorblind-friendly professional palette maintained
 
 Author: Christopher Bratkovics
-Enhanced: 2025 - Final Presentation Ready with Smart Positioning
+Enhanced: 2025 - External Annotation Areas Implementation
 """
 
 import pandas as pd
@@ -85,7 +84,7 @@ except Exception as e:
 
 
 class AdvancedVisualizer:
-    """Professional visualizer with smart annotation positioning and presentation-ready styling."""
+    """Professional visualizer with selective external annotation areas and presentation-ready styling."""
     
     def __init__(self, pipeline, interpreter):
         """
@@ -104,7 +103,7 @@ class AdvancedVisualizer:
         self.reports_dir = Path("../outputs/reports/")
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         
-        print("Professional Visualizer initialized with smart positioning and accessibility features")
+        print("Professional Visualizer initialized with external annotation areas")
     
     def set_test_data(self, y_test: Dict):
         """
@@ -115,145 +114,53 @@ class AdvancedVisualizer:
         """
         self.y_test = y_test
     
-    def _identify_chart_type(self, ax):
-        """Identify the type of chart to apply appropriate positioning logic."""
-        
-        # Check for scatter plot
-        if any(isinstance(child, plt.matplotlib.collections.PathCollection) 
-               for child in ax.get_children()):
-            return 'scatter'
-        
-        # Check for horizontal bar chart
-        if any(hasattr(child, 'get_width') and hasattr(child, 'get_height')
-               for child in ax.get_children()
-               if hasattr(child, 'get_width')):
-            # Simple heuristic: if bars are wider than tall, it's horizontal
-            bars = [child for child in ax.get_children() 
-                    if hasattr(child, 'get_width') and hasattr(child, 'get_height')]
-            if bars:
-                try:
-                    avg_width = np.mean([bar.get_width() for bar in bars[:3]])
-                    avg_height = np.mean([bar.get_height() for bar in bars[:3]])
-                    if avg_width > avg_height:
-                        return 'horizontal_bar'
-                    else:
-                        return 'vertical_bar'
-                except:
-                    return 'other'
-        
-        return 'other'
-
-    def _optimize_scatter_annotation(self, ax, default_x, default_y):
-        """Optimize annotation position for scatter plots."""
-        
-        # For scatter plots, check data density in corners
-        # Most scatter plots have data clustered in center-left, so adjust accordingly
-        
-        if default_y > 0.7:  # If requesting top position
-            return 0.98, 0.98  # Use top-right instead of top-left
-        elif default_y > 0.4:  # If requesting middle position
-            return 0.02, default_y  # Keep left side for middle positions
-        else:  # If requesting bottom position
-            return 0.02, 0.35  # Use consistent bottom-left position
-
-    def _optimize_horizontal_bar_annotation(self, ax, default_x, default_y):
-        """Optimize annotation position for horizontal bar charts."""
-        
-        # For horizontal bar charts, avoid right side where bars extend
-        # Place annotations on left side with better vertical spacing
-        
-        if default_y > 0.8:  # Top annotation
-            return 0.02, 0.95  # Slightly lower than default but clear of title
-        elif default_y > 0.4:  # Middle annotation  
-            return 0.02, 0.60  # Adjust middle position to avoid bar collision
-        else:  # Bottom annotation
-            return 0.02, 0.25  # Raise bottom annotation slightly
-        
-    def _optimize_vertical_bar_annotation(self, ax, default_x, default_y):
-        """Optimize annotation position for vertical bar charts."""
-        
-        # For vertical bar charts, top corners are usually safe
-        # Adjust horizontal positioning to avoid bar collision
-        
-        if default_x < 0.5:  # Left side annotation
-            return 0.02, default_y
-        else:  # Right side annotation
-            return 0.75, default_y  # Move slightly left from edge
-
-    def _calculate_optimal_position(self, ax, text, default_x, default_y, fontsize):
+    def _add_external_annotation_box(self, fig, text, x_pos, y_pos, width=0.15, height=0.12, 
+                                   style='info', fontsize=8):
         """
-        Calculate optimal annotation position to minimize visual conflicts.
-        
-        Returns:
-            Tuple of (optimal_x, optimal_y) positions
-        """
-        
-        # Get chart type and adjust positioning accordingly
-        chart_type = self._identify_chart_type(ax)
-        
-        if chart_type == 'scatter':
-            return self._optimize_scatter_annotation(ax, default_x, default_y)
-        elif chart_type == 'horizontal_bar':
-            return self._optimize_horizontal_bar_annotation(ax, default_x, default_y)
-        elif chart_type == 'vertical_bar':
-            return self._optimize_vertical_bar_annotation(ax, default_x, default_y)
-        else:
-            return default_x, default_y
-    
-    def _add_professional_annotation(self, ax, text, x_pos=0.02, y_pos=0.98, 
-                                   style='info', fontsize=8, smart_position=True):
-        """
-        Add professional annotation boxes with smart positioning to avoid visual conflicts.
-        
-        Enhanced method that automatically detects chart type and optimizes annotation
-        placement to avoid overlapping with chart elements and improve readability.
+        Add external annotation box using figure-level coordinates.
         
         Args:
-            ax: Matplotlib axes object to add annotation to
+            fig: Matplotlib figure object
             text: Text content for the annotation
-            x_pos: X position as fraction of axes (0.0 to 1.0)
-            y_pos: Y position as fraction of axes (0.0 to 1.0)
+            x_pos: X position in figure coordinates (0.0 to 1.0)
+            y_pos: Y position in figure coordinates (0.0 to 1.0)
+            width: Width of annotation box in figure coordinates
+            height: Height of annotation box in figure coordinates
             style: Style type ('info', 'success', 'warning', 'performance')
             fontsize: Font size for annotation text
-            smart_position: Whether to use intelligent positioning
         """
         
-        # Define optimized styling configurations with better contrast and sizing
+        # Define styling configurations
         style_configs = {
-            'info': dict(boxstyle='round,pad=0.3', facecolor='white', 
-                        alpha=0.92, edgecolor=COLORS['primary_blue'], linewidth=1.2),
-            'success': dict(boxstyle='round,pad=0.3', facecolor='#f8f9fa', 
-                           alpha=0.92, edgecolor=COLORS['success_green'], linewidth=1.2),
-            'warning': dict(boxstyle='round,pad=0.3', facecolor='#fff8e1', 
-                           alpha=0.92, edgecolor=COLORS['warning_orange'], linewidth=1.2),
-            'performance': dict(boxstyle='round,pad=0.3', facecolor='#e8f5e8', 
-                              alpha=0.92, edgecolor=COLORS['dark_green'], linewidth=1.2)
+            'info': dict(boxstyle='round,pad=0.4', facecolor='white', 
+                        alpha=0.95, edgecolor=COLORS['primary_blue'], linewidth=1.5),
+            'success': dict(boxstyle='round,pad=0.4', facecolor='#f8f9fa', 
+                           alpha=0.95, edgecolor=COLORS['success_green'], linewidth=1.5),
+            'warning': dict(boxstyle='round,pad=0.4', facecolor='#fff8e1', 
+                           alpha=0.95, edgecolor=COLORS['warning_orange'], linewidth=1.5),
+            'performance': dict(boxstyle='round,pad=0.4', facecolor='#e8f5e8', 
+                              alpha=0.95, edgecolor=COLORS['dark_green'], linewidth=1.5)
         }
         
         bbox_props = style_configs.get(style, style_configs['info'])
         
-        # Smart positioning logic
-        if smart_position:
-            x_pos, y_pos = self._calculate_optimal_position(ax, text, x_pos, y_pos, fontsize)
-        
-        # Add annotation with improved formatting and positioning
-        ax.text(x_pos, y_pos, text, transform=ax.transAxes, 
+        # Add annotation using figure coordinates
+        fig.text(x_pos, y_pos, text, transform=fig.transFigure,
                 verticalalignment='top', horizontalalignment='left',
                 bbox=bbox_props, fontsize=fontsize, fontweight='normal',
-                linespacing=1.2)
+                linespacing=1.3, wrap=True)
     
     def create_hero_dashboard(self, test_results: Dict) -> None:
         """
-        Create executive dashboard with key performance metrics and business impact visualization.
+        Create executive dashboard with external annotation areas.
         
-        This method generates a comprehensive dashboard showing model performance, competitive
-        advantage, and strategic metrics suitable for executive presentation. The dashboard
-        includes performance gauges, business impact analysis, and competitive comparison.
+        This method generates a comprehensive dashboard with annotations positioned
+        completely outside the chart areas using figure-level coordinates.
         
         Args:
             test_results: Dictionary containing model performance results for each target
         """
-        print("Creating executive dashboard for presentation...")
+        print("Creating executive dashboard with external annotation areas...")
         
         # Process model metrics with comprehensive error handling
         best_metrics = {}
@@ -293,22 +200,31 @@ class AdvancedVisualizer:
             print("Error: No valid metrics found for dashboard creation")
             return
         
-        # Create professional figure layout with optimized spacing
-        fig = plt.figure(figsize=(18, 14))
+        # Create figure with reserved space for external annotations
+        fig = plt.figure(figsize=(20, 16))  # Increased width for annotation areas
         fig.patch.set_facecolor('white')
-        gs = fig.add_gridspec(4, 4, height_ratios=[1.5, 1.2, 1.2, 0.8], 
-                             width_ratios=[1, 1, 1, 1], hspace=0.3, wspace=0.25)
+        
+        # Adjusted GridSpec to reserve space for external annotations
+        # Left side: 0.08-0.75 for charts, Right side: 0.78-0.95 for annotations
+        gs = fig.add_gridspec(4, 4, 
+                             height_ratios=[1.5, 1.2, 1.2, 0.8], 
+                             width_ratios=[1, 1, 1, 1], 
+                             left=0.08, right=0.75, top=0.90, bottom=0.15,
+                             hspace=0.3, wspace=0.25)
         
         # Add main title and descriptive subtitle
         fig.suptitle('NBA Performance Prediction: Executive Summary', 
-                     fontsize=20, fontweight='bold', y=0.96)
-        fig.text(0.5, 0.925, 'Advanced Machine Learning for Player Statistics Forecasting', 
-                ha='center', fontsize=12, style='italic', color=COLORS['neutral_gray'])
+                     fontsize=22, fontweight='bold', y=0.96)
+        fig.text(0.415, 0.925, 'Advanced Machine Learning for Player Statistics Forecasting', 
+                ha='center', fontsize=14, style='italic', color=COLORS['neutral_gray'])
         
         # Create performance gauges for each target variable
         targets = ['pts', 'reb', 'ast']
         target_names = ['POINTS', 'REBOUNDS', 'ASSISTS']
         gauge_colors = [COLORS['primary_blue'], COLORS['success_green'], COLORS['warning_orange']]
+        
+        # Store metrics for external annotations
+        performance_data = []
         
         for i, (target, target_name) in enumerate(zip(targets, target_names)):
             ax = fig.add_subplot(gs[0, i])
@@ -319,7 +235,15 @@ class AdvancedVisualizer:
                 mae = best_metrics[target]['mae']
                 model_name = best_metrics[target]['model'].replace('_', ' ').title()
                 
-                # Create performance gauge visualization
+                # Store for external annotation
+                performance_data.append({
+                    'target': target_name,
+                    'r2': r2_score,
+                    'mae': mae,
+                    'model': model_name
+                })
+                
+                # Create performance gauge visualization (no internal annotations)
                 bars = ax.bar([0], [r2_score], color=gauge_colors[i], alpha=0.8, width=0.7, 
                              edgecolor='white', linewidth=3)
                 
@@ -349,15 +273,6 @@ class AdvancedVisualizer:
                 for threshold, label, color in thresholds:
                     ax.axhline(y=threshold, color=color, linestyle='--', alpha=0.6, linewidth=1)
                 
-                # Determine performance quality classification
-                quality = ("Exceptional" if r2_score >= 95 else "Excellent" if r2_score >= 85 
-                          else "Good" if r2_score >= 70 else "Fair")
-                
-                # Add detailed performance annotation with smart positioning
-                annotation_text = f'Model: {model_name}\nAccuracy: ±{mae:.1f} {target}\nQuality: {quality}'
-                self._add_professional_annotation(ax, annotation_text, x_pos=0.05, y_pos=0.4, 
-                                                style='performance', fontsize=8, smart_position=True)
-                
                 # Apply background color coding based on performance
                 if r2_score >= 85:
                     ax.set_facecolor('#f8fff8')
@@ -374,7 +289,7 @@ class AdvancedVisualizer:
         impact_values = [25.4, 15.2, 8.7]
         impact_colors = [COLORS['gold'], COLORS['silver'], COLORS['bronze']]
         
-        # Create business impact bar chart
+        # Create business impact bar chart (no internal annotations)
         bars1 = ax1.bar(impact_categories, impact_values, color=impact_colors, 
                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.6)
         
@@ -389,15 +304,6 @@ class AdvancedVisualizer:
         ax1.set_title('Business Impact Analysis', fontweight='bold', fontsize=14, pad=15)
         ax1.set_ylabel('Performance Improvement (%)', fontweight='bold', fontsize=11)
         ax1.set_ylim(0, max(impact_values) * 1.2)
-        
-        # Add market opportunity annotation with smart positioning
-        impact_text = ('MARKET OPPORTUNITY:\n'
-                      'USD 150M+ Addressable Market\n'
-                      '94% Prediction Reliability\n'
-                      'Real-time Deployment Ready\n'
-                      'Multi-stakeholder Value')
-        self._add_professional_annotation(ax1, impact_text, x_pos=0.65, y_pos=0.95, 
-                                        style='success', fontsize=9, smart_position=True)
         
         # Create competitive comparison visualization
         ax2 = fig.add_subplot(gs[1, 2:])
@@ -416,7 +322,7 @@ class AdvancedVisualizer:
         reliability_scores = [our_reliability, 45.2, 38.7]
         comparison_colors = [COLORS['primary_blue'], COLORS['neutral_gray'], COLORS['accent_purple']]
         
-        # Create competitive comparison chart
+        # Create competitive comparison chart (no internal annotations)
         bars2 = ax2.bar(comparison_models, reliability_scores, color=comparison_colors, 
                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.6)
         
@@ -432,14 +338,6 @@ class AdvancedVisualizer:
         ax2.set_ylabel('Prediction Reliability (%)', fontweight='bold', fontsize=11)
         ax2.set_ylim(0, 100)
         
-        # Competitive advantage annotation with smart positioning
-        advantage_text = (f'COMPETITIVE EDGE:\n'
-                         f'+{our_reliability-45.2:.1f}% vs Industry\n'
-                         f'+{our_reliability-38.7:.1f}% vs Experts\n'
-                         f'Market Leadership Position')
-        self._add_professional_annotation(ax2, advantage_text, x_pos=0.02, y_pos=0.35, 
-                                        style='warning', fontsize=7, smart_position=True)
-        
         # Create strategic metrics overview
         ax3 = fig.add_subplot(gs[2, :])
         
@@ -450,7 +348,7 @@ class AdvancedVisualizer:
         strategy_colors = [COLORS['primary_blue'], COLORS['success_green'], COLORS['warning_orange'], 
                           COLORS['accent_purple'], COLORS['dark_green']]
         
-        # Create strategic metrics visualization
+        # Create strategic metrics visualization (no internal annotations)
         bars3 = ax3.bar(strategy_metrics, strategy_scores, color=strategy_colors, 
                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.7)
         
@@ -465,15 +363,6 @@ class AdvancedVisualizer:
         ax3.set_title('Strategic Performance Metrics', fontweight='bold', fontsize=14, pad=15)
         ax3.set_ylabel('Performance Score', fontweight='bold', fontsize=11)
         ax3.set_ylim(0, 100)
-        
-        # Enhanced strategic achievements annotation with smart positioning
-        strategy_text = ('KEY ACHIEVEMENTS:\n'
-                        '169,161 Games Analyzed\n'
-                        'Chronological Validation\n'
-                        'Production Architecture\n'
-                        'Statistical Significance')
-        self._add_professional_annotation(ax3, strategy_text, x_pos=0.02, y_pos=0.35, 
-                                        style='info', fontsize=7, smart_position=True)
         
         # Create executive summary section
         ax4 = fig.add_subplot(gs[3, :])
@@ -503,28 +392,233 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
                          alpha=0.9, edgecolor=COLORS['primary_blue'], linewidth=2),
                 linespacing=1.3)
         
-        plt.tight_layout(pad=3.0)  # Add extra padding for annotations
+        # ============ EXTERNAL ANNOTATION AREAS ============
+        
+        # Right-side annotation area for model performance details
+        perf_annotation = "MODEL PERFORMANCE DETAILS:\n\n"
+        for data in performance_data:
+            quality = ("Exceptional" if data['r2'] >= 95 else "Excellent" if data['r2'] >= 85 
+                      else "Good" if data['r2'] >= 70 else "Fair")
+            perf_annotation += f"{data['target']}:\n"
+            perf_annotation += f"  Model: {data['model']}\n"
+            perf_annotation += f"  Accuracy: {data['r2']:.1f}%\n"
+            perf_annotation += f"  Error: ±{data['mae']:.1f}\n"
+            perf_annotation += f"  Quality: {quality}\n\n"
+        
+        self._add_external_annotation_box(fig, perf_annotation, 
+                                        x_pos=0.78, y_pos=0.85, 
+                                        style='performance', fontsize=9)
+        
+        # Right-side annotation area for business opportunity
+        business_annotation = ("MARKET OPPORTUNITY:\n\n"
+                             "• USD 150M+ Addressable Market\n"
+                             "• 94% Prediction Reliability\n"
+                             "• Real-time Deployment Ready\n"
+                             "• Multi-stakeholder Value\n\n"
+                             "COMPETITIVE ADVANTAGES:\n"
+                             f"• +{our_reliability-45.2:.1f}% vs Industry Standard\n"
+                             f"• +{our_reliability-38.7:.1f}% vs Expert Predictions\n"
+                             "• Market Leadership Position\n"
+                             "• Production Architecture")
+        
+        self._add_external_annotation_box(fig, business_annotation, 
+                                        x_pos=0.78, y_pos=0.55, 
+                                        style='success', fontsize=9)
+        
+        # Right-side annotation area for key achievements
+        achievements_annotation = ("KEY ACHIEVEMENTS:\n\n"
+                                 "• 169,161 Games Analyzed\n"
+                                 "• Chronological Validation\n"
+                                 "• Production Architecture\n"
+                                 "• Statistical Significance\n"
+                                 "• Data Leakage Prevention\n\n"
+                                 "DEPLOYMENT STATUS:\n"
+                                 "• Models Production Ready\n"
+                                 "• API Infrastructure Built\n"
+                                 "• Real-time Predictions\n"
+                                 "• Scalable Architecture")
+        
+        self._add_external_annotation_box(fig, achievements_annotation, 
+                                        x_pos=0.78, y_pos=0.25, 
+                                        style='info', fontsize=9)
+        
+        plt.tight_layout()
         
         # Save dashboard
         filename = self.viz_dir / f"hero_dashboard.png"
         plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white', 
-                   edgecolor='none', pad_inches=0.2)
-        print(f"Executive dashboard saved to: {filename}")
+                   edgecolor='none', pad_inches=0.3)
+        print(f"Executive dashboard with external annotations saved to: {filename}")
         
         plt.close()  # Close figure to free memory
 
+    def create_stakeholder_dashboard(self, impact_metrics: Dict) -> None:
+        """
+        Create stakeholder value dashboard with external annotation areas.
+        
+        Args:
+            impact_metrics: Dictionary containing calculated business impact metrics
+        """
+        print("Creating stakeholder value dashboard with external annotation areas...")
+        
+        # Safely extract impact metrics with default values
+        def safe_get(d, key, default=0):
+            try:
+                return d.get(key, default) if isinstance(d, dict) else default
+            except (AttributeError, KeyError):
+                return default
+        
+        # Define stakeholder-specific metrics and values
+        stakeholder_data = {
+            'Fantasy Managers': {
+                'Win Rate': safe_get(impact_metrics.get('fantasy_sports', {}), 'season_win_improvement', 23.2),
+                'ROI Gain': safe_get(impact_metrics.get('fantasy_sports', {}), 'roi_improvement_pct', 28.4),
+                'Weekly Edge': safe_get(impact_metrics.get('fantasy_sports', {}), 'weekly_lineup_advantage', 15.8),
+                'Market Value': safe_get(impact_metrics.get('fantasy_sports', {}), 'addressable_market_millions', 202.5)
+            },
+            'Sports Bettors': {
+                'Break Even': safe_get(impact_metrics.get('sports_betting', {}), 'break_even_improvement', 62.8),
+                'ROI Boost': safe_get(impact_metrics.get('sports_betting', {}), 'roi_boost_pct', 19.9),
+                'Edge (bp)': safe_get(impact_metrics.get('sports_betting', {}), 'edge_basis_points', 405.1) / 10,
+                'Annual Value': safe_get(impact_metrics.get('sports_betting', {}), 'annual_value_millions', 9.5)
+            },
+            'NBA Teams': {
+                'Injury Prevention': safe_get(impact_metrics.get('team_analytics', {}), 'injury_prevention_value_millions', 2.1),
+                'Win Optimization': safe_get(impact_metrics.get('team_analytics', {}), 'rotation_optimization_wins', 5.7),
+                'Contract Accuracy': safe_get(impact_metrics.get('team_analytics', {}), 'contract_evaluation_accuracy', 79.3),
+                'Competitive Edge': safe_get(impact_metrics.get('team_analytics', {}), 'competitive_advantage_pct', 11.3)
+            },
+            'Media Partners': {
+                'Prediction Accuracy': safe_get(impact_metrics.get('overall_metrics', {}), 'our_accuracy_pct', 79.3),
+                'Content Value': 85.0,
+                'Audience Growth': 23.4,
+                'Story Precision': 92.0
+            }
+        }
+        
+        # Create figure with space for external annotations
+        fig = plt.figure(figsize=(18, 14))  # Adjusted size for annotation areas
+        fig.patch.set_facecolor('white')
+        fig.suptitle('Stakeholder Value Proposition Dashboard', fontsize=18, fontweight='bold', y=0.95)
+        
+        # Adjusted GridSpec to reserve center and bottom space for external annotations
+        gs = fig.add_gridspec(3, 2, 
+                             height_ratios=[2, 2, 0.8], 
+                             width_ratios=[1, 1],
+                             left=0.08, right=0.92, top=0.88, bottom=0.12,
+                             hspace=0.4, wspace=0.3)
+        
+        # Define colors and benefit descriptions for each stakeholder
+        stakeholder_colors = [COLORS['gold'], COLORS['silver'], COLORS['bronze'], COLORS['success_green']]
+        stakeholder_benefits = [
+            'Premium lineup optimization\nSeason-long competitive edge\nUSD 8B fantasy market',
+            'Statistical betting advantage\nQuantified risk reduction\nUSD 7.5B betting market',
+            'Data-driven roster decisions\nInjury prevention insights\n30 NBA teams',
+            'Evidence-based narratives\nAudience engagement boost\nGlobal media reach'
+        ]
+        
+        # Create visualization for each stakeholder group (2x2 layout in top area)
+        stakeholder_list = list(stakeholder_data.items())
+        
+        for idx, (stakeholder, metrics) in enumerate(stakeholder_list):
+            row = idx // 2
+            col = idx % 2
+            ax = fig.add_subplot(gs[row, col])
+            
+            # Extract metric names and values
+            metric_names = list(metrics.keys())
+            metric_values = list(metrics.values())
+            
+            # Create stakeholder-specific bar chart (no internal annotations)
+            bars = ax.bar(metric_names, metric_values, color=stakeholder_colors[idx], 
+                         alpha=0.8, edgecolor='black', linewidth=1.5, width=0.7)
+            
+            # Configure chart title and labels
+            ax.set_title(stakeholder, fontweight='bold', fontsize=14, pad=20,
+                        color=stakeholder_colors[idx])
+            ax.set_ylabel('Value Metric', fontweight='bold', fontsize=11)
+            
+            # Apply professional label formatting
+            ax.tick_params(axis='x', rotation=45, labelsize=10)
+            ax.tick_params(axis='y', labelsize=10)
+            
+            # Add metric value labels on bars
+            for bar, val in zip(bars, metric_values):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + max(metric_values)*0.015,
+                       f'{val:.1f}', ha='center', va='bottom', fontweight='bold', 
+                       fontsize=11, color='black')
+            
+            # Apply professional grid and styling
+            ax.grid(axis='y', alpha=0.3, linestyle='--')
+            ax.set_axisbelow(True)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+        
+        # ============ EXTERNAL ANNOTATION AREAS ============
+        
+        # Center annotation area between charts - Value Propositions
+        center_annotation = ("STAKEHOLDER VALUE PROPOSITIONS:\n\n"
+                           "FANTASY MANAGERS:\n"
+                           "• Premium lineup optimization\n"
+                           "• Season-long competitive edge\n"
+                           "• USD 8B fantasy market opportunity\n\n"
+                           "SPORTS BETTORS:\n"
+                           "• Statistical betting advantage\n"
+                           "• Quantified risk reduction\n"
+                           "• USD 7.5B betting market access\n\n"
+                           "NBA TEAMS:\n"
+                           "• Data-driven roster decisions\n"
+                           "• Injury prevention insights\n"
+                           "• 30 team competitive advantage\n\n"
+                           "MEDIA PARTNERS:\n"
+                           "• Evidence-based narratives\n"
+                           "• Audience engagement boost\n"
+                           "• Global media reach expansion")
+        
+        # Position in center area using figure coordinates
+        fig.text(0.5, 0.45, center_annotation, transform=fig.transFigure,
+                ha='center', va='center', fontsize=10, fontweight='normal',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='#f0f8ff', 
+                         alpha=0.95, edgecolor=COLORS['primary_blue'], linewidth=1.5),
+                linespacing=1.4)
+        
+        # Bottom annotation area - Implementation Strategy
+        bottom_annotation = ("IMPLEMENTATION STRATEGY & ROI:\n\n"
+                           "IMMEDIATE BENEFITS: Fantasy advantage +28.4% ROI | Betting edge 40+ basis points | Team analytics USD 2.1M savings\n"
+                           "COMPETITIVE MOAT: 79.3% prediction accuracy vs 45% industry standard | Production-ready deployment | Real-time API\n"
+                           "MARKET PENETRATION: Multi-stakeholder platform | Scalable architecture | Evidence-based value creation\n"
+                           "REVENUE MODEL: Subscription tiers | Enterprise licensing | Data-as-a-Service | Premium analytics packages")
+        
+        # Create a dedicated subplot for bottom annotation
+        ax_bottom = fig.add_subplot(gs[2, :])
+        ax_bottom.axis('off')
+        ax_bottom.text(0.5, 0.5, bottom_annotation, transform=ax_bottom.transAxes,
+                      ha='center', va='center', fontsize=10, fontweight='bold',
+                      bbox=dict(boxstyle='round,pad=0.4', facecolor=COLORS['light_blue'], 
+                               alpha=0.9, edgecolor=COLORS['success_green'], linewidth=2),
+                      linespacing=1.3)
+        
+        plt.tight_layout()
+        
+        # Save stakeholder dashboard
+        filename = self.viz_dir / f"stakeholder_dashboard.png"
+        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
+                   edgecolor='none', pad_inches=0.3)
+        print(f"Stakeholder dashboard with external annotations saved to: {filename}")
+        
+        plt.close()  # Close figure to free memory
+    
+    # Keep existing methods unchanged
     def create_feature_importance_plots(self, importance_results: Dict, test_results: Dict) -> None:
         """
-        Create feature importance visualizations with smart annotation positioning.
-        
-        Enhanced version that automatically positions annotations to avoid visual conflicts
-        with the horizontal bar charts and provides clear, readable layouts.
+        Create feature importance visualizations with consistent annotation positioning.
         
         Args:
             importance_results: Dictionary containing feature importance data for each model
             test_results: Dictionary containing model performance metrics
         """
-        print("Creating feature importance visualizations with smart positioning...")
+        print("Creating feature importance visualizations with consistent positioning...")
         
         for target in importance_results.keys():
             # Identify best performing model for this target
@@ -605,11 +699,11 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             
-            # ENHANCED: Smart positioning for horizontal bar charts
+            # Consistent annotation positioning (right side) - ORIGINAL AXES-LEVEL METHOD
             top_feature = enhanced_features[0]
             top_importance = importance_df['importance'].iloc[0]
             
-            # Insights annotation - positioned to avoid bar collision using smart positioning
+            # Insights annotation - positioned on right side consistently
             insights_text = (f'TOP PREDICTOR:\n{top_feature}\n'
                            f'Importance: {top_importance:.3f}\n\n'
                            f'KEY INSIGHTS:\n'
@@ -617,11 +711,13 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
                            f'Load management metrics prominent\n'
                            f'Opportunity drives performance')
             
-            # Smart positioning will automatically place this optimally for horizontal bars
-            self._add_professional_annotation(ax, insights_text, x_pos=0.98, y_pos=0.78, 
-                                            style='info', fontsize=8, smart_position=False)
+            ax.text(0.98, 0.78, insights_text, transform=ax.transAxes,
+                   verticalalignment='top', horizontalalignment='left',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                            alpha=0.92, edgecolor=COLORS['primary_blue'], linewidth=1.2),
+                   fontsize=8, fontweight='normal', linespacing=1.2)
             
-            # Model performance annotation - positioned at top with smart positioning
+            # Model performance annotation - positioned at top right consistently
             if target in test_results and best_model_name in test_results[target]:
                 model_perf = test_results[target][best_model_name]
                 perf_text = (f'MODEL PERFORMANCE:\n'
@@ -629,9 +725,11 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
                            f'Mean Error: ±{model_perf["mae"]:.1f}\n'
                            f'Quality: {"Excellent" if model_perf["r2"] > 0.8 else "Good" if model_perf["r2"] > 0.6 else "Fair"}')
                 
-                # Smart positioning will automatically optimize this position
-                self._add_professional_annotation(ax, perf_text, x_pos=0.98, y_pos=0.98, 
-                                                style='performance', fontsize=8, smart_position=False)
+                ax.text(0.98, 0.98, perf_text, transform=ax.transAxes,
+                       verticalalignment='top', horizontalalignment='left',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='#e8f5e8', 
+                                alpha=0.92, edgecolor=COLORS['dark_green'], linewidth=1.2),
+                       fontsize=8, fontweight='normal', linespacing=1.2)
             
             plt.tight_layout(pad=2.0)  # Add padding for annotations
             
@@ -645,16 +743,13 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
 
     def create_prediction_analysis(self, test_results: Dict, y_test: Dict) -> None:
         """
-        Create prediction vs actual analysis with smart annotation positioning.
-        
-        Enhanced scatter plot analysis with intelligent annotation placement that
-        automatically avoids data clusters and provides optimal readability.
+        Create prediction vs actual analysis with consistent annotation positioning.
         
         Args:
             test_results: Dictionary containing model predictions and performance metrics
             y_test: Dictionary containing actual test values for validation
         """
-        print("Creating prediction accuracy analysis with smart positioning...")
+        print("Creating prediction accuracy analysis with consistent positioning...")
         
         n_targets = len(y_test)
         fig, axes = plt.subplots(1, n_targets, figsize=(7*n_targets, 8))
@@ -701,46 +796,53 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
                 mae = best_metrics['mae']
                 rmse = best_metrics.get('rmse', np.sqrt(((actual - predicted)**2).mean()))
                 
-                # ENHANCED: Smart positioning for scatter plots
-                # Performance annotation - smart positioning will use top-right for scatter plots
+                # Performance annotation - consistent positioning (left side for scatter plots) - ORIGINAL AXES-LEVEL METHOD
                 main_annotation = (f'PERFORMANCE METRICS:\n'
                                  f'Accuracy (R²): {r2_score:.3f}\n'
                                  f'Typical Error: ±{mae:.1f} {target}\n'
                                  f'RMSE: {rmse:.2f}\n'
                                  f'Model: {best_model.replace("_", " ").title()}')
                 
-                # Smart positioning automatically optimizes for scatter plots
-                self._add_professional_annotation(axes[i], main_annotation, x_pos=0.02, y_pos=0.98, 
-                                                style='info', fontsize=8, smart_position=True)
+                axes[i].text(0.02, 0.98, main_annotation, transform=axes[i].transAxes, 
+                           verticalalignment='top', horizontalalignment='left',
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                                    alpha=0.92, edgecolor=COLORS['primary_blue'], linewidth=1.2),
+                           fontsize=8, fontweight='normal', linespacing=1.2)
                 
                 # Generate business interpretation
                 if r2_score >= 0.85:
                     quality = "Exceptional"
                     business_note = "Deployment ready\nHigh confidence decisions"
-                    style = 'performance'
+                    style_color = COLORS['dark_green']
+                    bg_color = '#e8f5e8'
                 elif r2_score >= 0.7:
                     quality = "Excellent"
                     business_note = "Production suitable\nReliable predictions"
-                    style = 'success'
+                    style_color = COLORS['success_green']
+                    bg_color = '#f8f9fa'
                 elif r2_score >= 0.5:
                     quality = "Good"
                     business_note = "Operationally useful\nStrategic planning ready"
-                    style = 'warning'
+                    style_color = COLORS['warning_orange']
+                    bg_color = '#fff8e1'
                 else:
                     quality = "Fair"
                     business_note = "Trend analysis suitable\nRequires improvement"
-                    style = 'warning'
+                    style_color = COLORS['warning_orange']
+                    bg_color = '#fff8e1'
                 
-                # Business assessment annotation with smart positioning
+                # Business assessment annotation with consistent positioning - ORIGINAL AXES-LEVEL METHOD
                 business_annotation = (f'BUSINESS ASSESSMENT:\n'
                                      f'Quality: {quality}\n'
                                      f'Precision: ±{mae:.1f} {target}/game\n'
                                      f'{business_note}\n'
                                      f'Sample: {len(actual):,} games')
                 
-                # Smart positioning will automatically place this optimally
-                self._add_professional_annotation(axes[i], business_annotation, x_pos=0.02, y_pos=0.85, 
-                                                style=style, fontsize=8, smart_position=True)
+                axes[i].text(0.02, 0.85, business_annotation, transform=axes[i].transAxes,
+                           verticalalignment='top', horizontalalignment='left',
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor=bg_color, 
+                                    alpha=0.92, edgecolor=style_color, linewidth=1.2),
+                           fontsize=8, fontweight='normal', linespacing=1.2)
                 
                 # Configure axis labels and styling
                 axes[i].set_xlabel(f'Actual {target.upper()}', fontweight='bold', fontsize=12)
@@ -767,134 +869,6 @@ VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention"
         plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
                    edgecolor='none', pad_inches=0.2)
         print(f"Prediction analysis saved to: {filename}")
-        
-        plt.close()  # Close figure to free memory
-
-    def create_stakeholder_dashboard(self, impact_metrics: Dict) -> None:
-        """
-        Create stakeholder value dashboard with smart annotation positioning.
-        
-        Enhanced 2x2 dashboard with intelligent annotation placement that accounts
-        for the quadrant layout and optimizes positioning for each panel.
-        
-        Args:
-            impact_metrics: Dictionary containing calculated business impact metrics
-        """
-        print("Creating stakeholder value dashboard with smart positioning...")
-        
-        # Safely extract impact metrics with default values
-        def safe_get(d, key, default=0):
-            try:
-                return d.get(key, default) if isinstance(d, dict) else default
-            except (AttributeError, KeyError):
-                return default
-        
-        # Define stakeholder-specific metrics and values
-        stakeholder_data = {
-            'Fantasy Managers': {
-                'Win Rate': safe_get(impact_metrics.get('fantasy_sports', {}), 'season_win_improvement', 23.2),
-                'ROI Gain': safe_get(impact_metrics.get('fantasy_sports', {}), 'roi_improvement_pct', 28.4),
-                'Weekly Edge': safe_get(impact_metrics.get('fantasy_sports', {}), 'weekly_lineup_advantage', 15.8),
-                'Market Value': safe_get(impact_metrics.get('fantasy_sports', {}), 'addressable_market_millions', 202.5)
-            },
-            'Sports Bettors': {
-                'Break Even': safe_get(impact_metrics.get('sports_betting', {}), 'break_even_improvement', 62.8),
-                'ROI Boost': safe_get(impact_metrics.get('sports_betting', {}), 'roi_boost_pct', 19.9),
-                'Edge (bp)': safe_get(impact_metrics.get('sports_betting', {}), 'edge_basis_points', 405.1) / 10,
-                'Annual Value': safe_get(impact_metrics.get('sports_betting', {}), 'annual_value_millions', 9.5)
-            },
-            'NBA Teams': {
-                'Injury Prevention': safe_get(impact_metrics.get('team_analytics', {}), 'injury_prevention_value_millions', 2.1),
-                'Win Optimization': safe_get(impact_metrics.get('team_analytics', {}), 'rotation_optimization_wins', 5.7),
-                'Contract Accuracy': safe_get(impact_metrics.get('team_analytics', {}), 'contract_evaluation_accuracy', 79.3),
-                'Competitive Edge': safe_get(impact_metrics.get('team_analytics', {}), 'competitive_advantage_pct', 11.3)
-            },
-            'Media Partners': {
-                'Prediction Accuracy': safe_get(impact_metrics.get('overall_metrics', {}), 'our_accuracy_pct', 79.3),
-                'Content Value': 85.0,
-                'Audience Growth': 23.4,
-                'Story Precision': 92.0
-            }
-        }
-        
-        # Create 2x2 dashboard layout
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        fig.patch.set_facecolor('white')
-        fig.suptitle('Stakeholder Value Proposition Dashboard', fontsize=18, fontweight='bold', y=0.95)
-        
-        # Define colors and benefit descriptions for each stakeholder
-        stakeholder_colors = [COLORS['gold'], COLORS['silver'], COLORS['bronze'], COLORS['success_green']]
-        stakeholder_benefits = [
-            'Premium lineup optimization\nSeason-long competitive edge\nUSD 8B fantasy market',
-            'Statistical betting advantage\nQuantified risk reduction\nUSD 7.5B betting market',
-            'Data-driven roster decisions\nInjury prevention insights\n30 NBA teams',
-            'Evidence-based narratives\nAudience engagement boost\nGlobal media reach'
-        ]
-        
-        # Create visualization for each stakeholder group
-        for idx, (stakeholder, metrics) in enumerate(stakeholder_data.items()):
-            row = idx // 2
-            col = idx % 2
-            ax = axes[row, col]
-            
-            # Extract metric names and values
-            metric_names = list(metrics.keys())
-            metric_values = list(metrics.values())
-            
-            # Create stakeholder-specific bar chart
-            bars = ax.bar(metric_names, metric_values, color=stakeholder_colors[idx], 
-                         alpha=0.8, edgecolor='black', linewidth=1.5, width=0.7)
-            
-            # Configure chart title and labels
-            ax.set_title(stakeholder, fontweight='bold', fontsize=14, pad=20,
-                        color=stakeholder_colors[idx])
-            ax.set_ylabel('Value Metric', fontweight='bold', fontsize=11)
-            
-            # Apply professional label formatting
-            ax.tick_params(axis='x', rotation=45, labelsize=10)
-            ax.tick_params(axis='y', labelsize=10)
-            
-            # Add metric value labels on bars
-            for bar, val in zip(bars, metric_values):
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + max(metric_values)*0.015,
-                       f'{val:.1f}', ha='center', va='bottom', fontweight='bold', 
-                       fontsize=11, color='black')
-            
-            # Apply professional grid and styling
-            ax.grid(axis='y', alpha=0.3, linestyle='--')
-            ax.set_axisbelow(True)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            
-            # ENHANCED: Smart positioning for 2x2 grid layout
-            benefit_text = (f'VALUE PROPOSITION:\n{stakeholder_benefits[idx]}\n\n'
-                          f'KEY BENEFITS:\n'
-                          f'Data-driven decisions\n'
-                          f'Competitive advantage\n'
-                          f'Measurable ROI')
-            
-            # Calculate quadrant-aware positioning
-            if row == 0:  # Top row - position lower to avoid title collision
-                y_position = 0.25
-            else:  # Bottom row - can use higher position
-                y_position = 0.35
-                
-            # Left column - use left position (bars don't typically extend far enough to interfere)
-            x_position = 0.02
-            
-            # Apply smart positioning with quadrant awareness
-            self._add_professional_annotation(ax, benefit_text, 
-                                            x_pos=x_position, y_pos=y_position, 
-                                            style='success', fontsize=7, smart_position=True)
-        
-        plt.tight_layout(pad=2.5)  # Add padding for annotations
-        
-        # Save stakeholder dashboard
-        filename = self.viz_dir / f"stakeholder_dashboard.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
-                   edgecolor='none', pad_inches=0.2)
-        print(f"Stakeholder dashboard saved to: {filename}")
         
         plt.close()  # Close figure to free memory
 
@@ -1222,11 +1196,11 @@ Scalable architecture supporting real-time predictions for 450+ active players
 def create_presentation_visuals(pipeline, test_results: Dict, 
                                y_test: Dict, importance_results: Dict) -> None:
     """
-    Create comprehensive presentation-ready visualizations with smart annotation positioning.
+    Create comprehensive presentation-ready visualizations with external annotation areas for key dashboards.
     
-    This function orchestrates the creation of all visualization components with enhanced
-    smart positioning that automatically optimizes annotation placement to avoid visual
-    conflicts and improve readability across different chart types.
+    This function orchestrates the creation of all visualization components with external
+    annotation positioning for hero and stakeholder dashboards, while maintaining optimal
+    axes-level annotations for feature importance and prediction analysis plots.
     
     Args:
         pipeline: Trained model pipeline object
@@ -1234,18 +1208,18 @@ def create_presentation_visuals(pipeline, test_results: Dict,
         y_test: Dictionary containing actual test values
         importance_results: Dictionary containing feature importance analysis
     """
-    print("CREATING PRESENTATION-READY VISUALIZATIONS WITH SMART POSITIONING")
+    print("CREATING PRESENTATION-READY VISUALIZATIONS WITH SELECTIVE EXTERNAL ANNOTATIONS")
     print("-" * 80)
     
-    # Initialize enhanced professional visualizer with smart positioning
+    # Initialize professional visualizer with external annotation capabilities
     visualizer = AdvancedVisualizer(pipeline, None)
     visualizer.set_test_data(y_test)
     
-    # Create comprehensive visualization suite with smart annotation positioning
-    print("\nGenerating executive dashboard...")
+    # Create comprehensive visualization suite with targeted external annotations
+    print("\nGenerating executive dashboard with external annotations...")
     visualizer.create_hero_dashboard(test_results)
     
-    print("Creating stakeholder value propositions...")
+    print("Creating stakeholder value propositions with external annotations...")
     visualizer.create_stakeholder_dashboard({
         'fantasy_sports': {'roi_improvement_pct': 28.4, 'addressable_market_millions': 202.5},
         'sports_betting': {'break_even_improvement': 62.8, 'edge_basis_points': 405.1},
@@ -1253,40 +1227,35 @@ def create_presentation_visuals(pipeline, test_results: Dict,
         'overall_metrics': {'our_accuracy_pct': 79.3}
     })
     
-    print("Building feature importance analyses...")
+    print("Building feature importance analyses with optimized axes-level annotations...")
     visualizer.create_feature_importance_plots(importance_results, test_results)
     
-    print("Generating prediction accuracy analysis...")
+    print("Generating prediction accuracy analysis with optimized axes-level annotations...")
     visualizer.create_prediction_analysis(test_results, y_test)
     
-    print("\nSMART POSITIONING VISUALIZATION SUITE COMPLETE")
+    print("\nSELECTIVE EXTERNAL ANNOTATION IMPLEMENTATION COMPLETE")
     print("=" * 70)
-    print("Enhanced improvements delivered:")
-    print("  Smart annotation positioning system for optimal readability")
-    print("  Chart type detection (scatter, horizontal bar, vertical bar)")
-    print("  Dynamic position calculation based on visual conflicts")
-    print("  Quadrant-aware positioning for grid layouts")
-    print("  Automatic overlap avoidance and visual balance")
-    print("  Colorblind-friendly professional palette for accessibility")
-    print("  Enhanced text hierarchy and readability for presentations")
-    print("  Top 10 feature importance displays (focused and clean)")
-    print("  Professional styling and visual polish")
-    print("  Presentation-ready quality suitable for executive audiences")
-    print("  All visualizations saved as PNG files with optimal positioning")
-    print(f"\nAll enhanced visuals saved to: {visualizer.viz_dir}")
+    print("Targeted annotation improvements delivered:")
+    print("  External annotation zones for HERO DASHBOARD (executive summary)")
+    print("  External annotation zones for STAKEHOLDER DASHBOARD (value propositions)")
+    print("  Optimized axes-level annotations for FEATURE IMPORTANCE (horizontal bars)")
+    print("  Optimized axes-level annotations for PREDICTION ANALYSIS (scatter plots)")
+    print("  Best-of-both approach: external where beneficial, axes-level where optimal")
+    print("  Professional styling and visual polish maintained throughout")
+    print("  Enhanced readability with appropriate annotation positioning per chart type")
+    print("  All visualizations saved as PNG files with optimized annotation placement")
+    print(f"\nAll enhanced visuals with selective external annotations saved to: {visualizer.viz_dir}")
     
     return visualizer
 
 
 # Usage documentation and module information
 if __name__ == "__main__":
-    print("Enhanced NBA Visualization Module - Smart Positioning Ready")
-    print("Key smart positioning improvements implemented:")
-    print("  1. Chart type detection for optimal annotation placement")
-    print("  2. Dynamic position calculation to avoid visual conflicts") 
-    print("  3. Scatter plot optimization (top-right for performance, bottom-left for business)")
-    print("  4. Horizontal bar chart optimization (left side, middle/top spacing)")
-    print("  5. Quadrant-aware positioning for 2x2 grid layouts")
-    print("  6. Smart overlap avoidance and visual balance")
-    print("  7. Professional colorblind-friendly palette for accessibility")
-    print("  8. PNG files saved automatically with optimized layouts")
+    print("Enhanced NBA Visualization Module - Selective External Annotation Areas")
+    print("Key improvements implemented:")
+    print("  1. External annotation zones for hero and stakeholder dashboards")
+    print("  2. Maintained axes-level annotations for feature importance and prediction plots")
+    print("  3. Figure-level positioning for executive and stakeholder visualizations")
+    print("  4. Optimal annotation placement strategy per visualization type")
+    print("  5. Professional presentation quality with appropriate annotation methods")
+    print("  6. Best-of-both approach for maximum visual impact and readability")
