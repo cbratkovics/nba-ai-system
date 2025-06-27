@@ -5,7 +5,6 @@
     "blk",
     "turnover",
     "pf",
-    "minutes_played",
     "rest_days",
     "stl_per_36min",
     "blk_per_36min",
@@ -19,11 +18,9 @@
     "days_since_season_start",
     "opponent_fga_allowed_avg",
     "opponent_total_minutes",
-    "opponent_pace_estimate",
     "minutes_played_position_avg",
     "reb_position_avg",
     "ast_position_avg",
-    "fga_position_avg",
     "minutes_played_x_rest_days",
     "minutes_played_x_is_home_game",
     "rest_days_x_is_home_game",
@@ -68,12 +65,12 @@
     "rest_days_category_4_plus_days"
   ],
   "metrics": {
-    "mae": 0.7481661816289048,
-    "rmse": 1.2687437240224335,
-    "r2": 0.7140266969120967,
-    "mape": 6.991878442989671e+16,
-    "predictions": "[2.69003727 1.64209924 0.78769969 ... 3.15374125 4.97195077 3.34492055]"
+    "mae": 0.7522436593259967,
+    "rmse": 1.271967504032788,
+    "r2": 0.7125715783440002,
+    "mape": 7.1290895989418616e+16,
+    "predictions": "[2.70694149 1.64250711 1.08128007 ... 2.98426646 4.69530137 3.16515341]"
   },
-  "timestamp": "20250626_204434",
+  "timestamp": "20250627_024728",
   "has_scaler": false
 }

@@ -1,103 +1,103 @@
 NBA PLAYER PERFORMANCE PREDICTION - MODEL RESULTS SUMMARY
 ============================================================
-Generated: 2025-06-26 20:44:47
+Generated: 2025-06-27 01:13:17
 
 MODEL PERFORMANCE SUMMARY
 ------------------------------
 
 PTS:
   Linear Regression:
-    R² = -0.054
-    MAE = 5.28
-    RMSE = 8.894209820913852
+    R² = -0.062
+    MAE = 5.34
+    RMSE = 8.926187797473307
   Ridge:
-    R² = 0.879
-    MAE = 2.10
-    RMSE = 3.0151659870850205
+    R² = 0.867
+    MAE = 2.16
+    RMSE = 3.161415628747939
   Elastic Net:
-    R² = 0.875
+    R² = 0.858
     MAE = 2.08
-    RMSE = 3.057782503824539
+    RMSE = 3.27025721808503
   Random Forest:
-    R² = 0.946
-    MAE = 1.15
-    RMSE = 2.015112638310712
+    R² = 0.939
+    MAE = 1.22
+    RMSE = 2.1463920444476603
   Gradient Boosting:
     R² = -0.054
     MAE = 5.19
-    RMSE = 8.894044586496175
-  BEST MODEL: Random Forest (R² = 0.946)
+    RMSE = 8.895963013853683
+  BEST MODEL: Random Forest (R² = 0.939)
 
 REB:
   Linear Regression:
-    R² = 0.232
-    MAE = 1.71
-    RMSE = 2.9760586784448932
+    R² = 0.208
+    MAE = 1.77
+    RMSE = 3.021559251445108
   Ridge:
-    R² = 0.682
-    MAE = 1.33
-    RMSE = 1.9148482928085588
+    R² = 0.652
+    MAE = 1.40
+    RMSE = 2.0023246246559987
   Elastic Net:
-    R² = 0.677
-    MAE = 1.34
-    RMSE = 1.928659750060542
+    R² = 0.647
+    MAE = 1.40
+    RMSE = 2.0169106054122445
   Random Forest:
-    R² = 0.719
-    MAE = 1.05
-    RMSE = 1.799287750230405
+    R² = 0.715
+    MAE = 1.06
+    RMSE = 1.8139064435527583
   Gradient Boosting:
-    R² = 0.205
+    R² = 0.207
     MAE = 1.64
-    RMSE = 3.0277914644846695
-  BEST MODEL: Random Forest (R² = 0.719)
+    RMSE = 3.024722182040435
+  BEST MODEL: Random Forest (R² = 0.715)
 
 AST:
   Linear Regression:
-    R² = 0.704
-    MAE = 0.87
-    RMSE = 1.291460325238386
+    R² = 0.686
+    MAE = 0.91
+    RMSE = 1.328936153422888
   Ridge:
-    R² = 0.704
-    MAE = 0.87
-    RMSE = 1.291454525473026
+    R² = 0.686
+    MAE = 0.91
+    RMSE = 1.3289308206140151
   Elastic Net:
-    R² = 0.701
-    MAE = 0.86
-    RMSE = 1.2966730324189908
+    R² = 0.684
+    MAE = 0.90
+    RMSE = 1.3332093370270222
   Random Forest:
-    R² = 0.708
+    R² = 0.707
     MAE = 0.75
-    RMSE = 1.282622236297481
+    RMSE = 1.2836290760280897
   Gradient Boosting:
-    R² = 0.714
+    R² = 0.713
     MAE = 0.75
-    RMSE = 1.2687437240224335
-  BEST MODEL: Gradient Boosting (R² = 0.714)
+    RMSE = 1.271967504032788
+  BEST MODEL: Gradient Boosting (R² = 0.713)
 
 
 TOP PREDICTIVE FEATURES
 ------------------------------
 
 PTS - Top 5 Features:
-  ast_outlier_flag: 6.599
-  minutes_played: 2.271
-  elite_scorer: 0.466
-  elite_usage: 0.430
-  turnover: 0.229
+  ast_outlier_flag: 6.648
+  sufficient_rest_x_minutes_played: 1.027
+  elite_usage: 0.459
+  sufficient_rest: 0.447
+  elite_scorer: 0.408
 
 REB - Top 5 Features:
-  ast_outlier_flag: 6.599
-  minutes_played: 2.271
-  elite_scorer: 0.466
-  elite_usage: 0.430
-  turnover: 0.229
+  ast_outlier_flag: 6.648
+  sufficient_rest_x_minutes_played: 1.027
+  elite_usage: 0.459
+  sufficient_rest: 0.447
+  elite_scorer: 0.408
 
 AST - Top 5 Features:
-  ast_outlier_flag: 6.599
-  minutes_played: 2.271
-  elite_scorer: 0.466
-  elite_usage: 0.430
-  turnover: 0.229
+  ast_outlier_flag: 6.648
+  sufficient_rest_x_minutes_played: 1.027
+  elite_usage: 0.459
+  sufficient_rest: 0.447
+  elite_scorer: 0.408
 
 
 KEY INSIGHTS

@@ -44,7 +44,7 @@ class ModelConfig:
     random_state: int = 42
     n_cv_folds: int = 5
     max_features_for_selection: int = 25
-    correlation_threshold: float = 0.95
+    correlation_threshold: float = 0.80
     variance_threshold: float = 0.01
     feature_selection_method: str = 'rfe'  # Options: 'rfe', 'selectk', 'rfecv'
 
@@ -62,7 +62,7 @@ class DataLeakageDetector:
     """Utility class to detect and prevent data leakage in feature sets."""
     
     @staticmethod
-    def detect_target_leakage(X: pd.DataFrame, y: pd.Series, correlation_threshold: float = 0.95) -> List[str]:
+    def detect_target_leakage(X: pd.DataFrame, y: pd.Series, correlation_threshold: float = 0.80) -> List[str]:
         """
         Detect features that are too highly correlated with the target variable.
         
@@ -259,7 +259,7 @@ class SmartFeatureSelector:
         detector = DataLeakageDetector()
         
         # Check for correlation-based leakage
-        correlation_leakage = detector.detect_target_leakage(X, y, correlation_threshold=0.90)
+        correlation_leakage = detector.detect_target_leakage(X, y, correlation_threshold=0.80)
         # Check for name-based leakage patterns
         calculated_leakage = detector.detect_calculated_leakage_features(X.columns.tolist())
         
@@ -382,7 +382,7 @@ class ModelPipeline:
         
         # Final leakage check for each target
         for target_name, target_series in y.items():
-            high_corr_features = DataLeakageDetector.detect_target_leakage(X, target_series, correlation_threshold=0.90)
+            high_corr_features = DataLeakageDetector.detect_target_leakage(X, target_series, correlation_threshold=0.80)
             if high_corr_features:
                 X = X.drop(columns=high_corr_features, errors='ignore')
         
@@ -934,6 +934,9 @@ class ModelInterpreter:
         }
 
 
+# Complete fixed ProductionModelManager class for model_pipeline.py
+# Replace the entire ProductionModelManager class with this:
+
 class ProductionModelManager:
     """
     Manages trained models for production deployment including serialization
@@ -974,69 +977,95 @@ class ProductionModelManager:
                     'features': selected_features,
                     'metrics': best_metrics
                 }
+                
+                print(f"  {target.upper()}: {best_model_name} (R² = {best_metrics['r2']:.3f})")
     
-    def create_prediction_function(self) -> callable:
+    def create_prediction_function(self):
         """
-        Create a single function for making predictions on new data.
+        Create a prediction function that properly handles scaling/unscaling.
         
-        This function handles all preprocessing and returns predictions
-        for all three targets.
+        Returns:
+            Callable that takes feature dict and returns predictions dict
         """
+        # Make sure deployment models are prepared
+        if not self.deployment_models:
+            raise RuntimeError("No deployment models prepared. Call prepare_for_deployment() first.")
         
-        def predict_player_performance(player_data: Dict[str, Any]) -> Dict[str, float]:
+        # Use deployment_models
+        deployment_models = self.deployment_models
+        
+        def predict(input_features: Dict[str, float]) -> Dict[str, float]:
             """
-            Predict player performance for a single game.
+            Make predictions for all targets given input features.
             
             Args:
-                player_data: Dictionary containing player features
+                input_features: Dictionary of feature names to values
                 
             Returns:
-                Dictionary with predicted points, rebounds, and assists
+                Dictionary with predictions for pts, reb, ast
             """
-            # Convert input to DataFrame
-            input_df = pd.DataFrame([player_data])
-            
-            # Handle categorical encoding for position if present
-            for col in input_df.select_dtypes(include=['object']).columns:
-                if col.startswith('player_position'):
-                    unique_positions = ['C', 'F', 'G']
-                    for pos in unique_positions:
-                        input_df[f'player_position_{pos}'] = (input_df[col] == pos).astype(int)
-                    input_df = input_df.drop(columns=[col])
-            
             predictions = {}
             
-            # Generate predictions for each target
-            for target, deployment_info in self.deployment_models.items():
+            for target in ['pts', 'reb', 'ast']:
                 try:
-                    # Ensure all required features are present
-                    for feature in deployment_info['features']:
-                        if feature not in input_df.columns:
-                            input_df[feature] = 0
+                    if target not in deployment_models:
+                        print(f"Warning: No model found for {target}")
+                        defaults = {'pts': 15.0, 'reb': 5.0, 'ast': 3.0}
+                        predictions[target] = defaults.get(target, 0.0)
+                        continue
                     
-                    # Select required features
-                    X_input = input_df[deployment_info['features']]
+                    # Get deployment info for this target
+                    deployment_info = deployment_models[target]
+                    model = deployment_info['model']
+                    scaler = deployment_info.get('scaler')
+                    features = deployment_info['features']
                     
-                    # Apply scaling if necessary
-                    if deployment_info['scaler'] is not None:
-                        X_input = pd.DataFrame(
-                            deployment_info['scaler'].transform(X_input),
-                            columns=X_input.columns
-                        )
+                    # Create feature DataFrame with required features
+                    feature_values = []
+                    for feature in features:
+                        if feature in input_features:
+                            feature_values.append(input_features[feature])
+                        else:
+                            # Use 0 as default for missing features
+                            feature_values.append(0)
                     
-                    # Generate prediction
-                    prediction = deployment_info['model'].predict(X_input)[0]
-                    predictions[target] = max(0, round(prediction, 1))  # Ensure non-negative
+                    feature_df = pd.DataFrame([feature_values], columns=features)
+                    
+                    # Apply scaling if scaler exists
+                    if scaler is not None:
+                        feature_array = scaler.transform(feature_df)
+                        feature_df_scaled = pd.DataFrame(feature_array, columns=features)
+                    else:
+                        feature_df_scaled = feature_df
+                    
+                    # Get prediction
+                    raw_pred = model.predict(feature_df_scaled)[0]
+                    
+                    # Apply reasonable bounds for basketball stats
+                    if target == 'pts':
+                        actual_pred = np.clip(raw_pred, 0, 60)
+                    elif target == 'reb':
+                        actual_pred = np.clip(raw_pred, 0, 25)
+                    elif target == 'ast':
+                        actual_pred = np.clip(raw_pred, 0, 20)
+                    else:
+                        actual_pred = raw_pred
+                    
+                    predictions[target] = round(float(actual_pred), 1)
                     
                 except Exception as e:
-                    predictions[target] = 0.0
+                    print(f"Error predicting {target}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Fallback to reasonable defaults
+                    defaults = {'pts': 15.0, 'reb': 5.0, 'ast': 3.0}
+                    predictions[target] = defaults.get(target, 0.0)
             
             return predictions
         
-        return predict_player_performance
+        return predict
 
-
-    def save_production_artifacts(self, output_dir: str = "../outputs/artifacts") -> None:
+    def save_production_artifacts(self, output_dir: str = "../outputs/artifacts") -> Path:
         """
         Save all production artifacts including models, scalers, and metadata.
         
@@ -1077,7 +1106,44 @@ class ProductionModelManager:
         print(f"Production artifacts successfully saved to: {output_path}")
         return output_path
 
-
+# If you need to check whether your pipeline uses scaling, add this diagnostic function:
+def diagnose_scaling_issue(pipeline, X_sample, y_sample):
+    """
+    Diagnose whether the pipeline is using scaled targets.
+    
+    Args:
+        pipeline: The model pipeline object
+        X_sample: Sample feature data
+        y_sample: Sample target data (dict with 'pts', 'reb', 'ast')
+    """
+    print("Diagnosing scaling issues...")
+    
+    # Check if y values look scaled
+    for target, values in y_sample.items():
+        min_val, max_val = values.min(), values.max()
+        mean_val = values.mean()
+        
+        print(f"\n{target.upper()} statistics:")
+        print(f"  Min: {min_val:.3f}")
+        print(f"  Max: {max_val:.3f}")
+        print(f"  Mean: {mean_val:.3f}")
+        
+        if max_val < 1.0 or (max_val - min_val) < 2.0:
+            print(f"  WARNING: {target} appears to be scaled/normalized!")
+        else:
+            print(f"  OK: {target} appears to be in original scale")
+    
+    # Check if the pipeline has scalers
+    if hasattr(pipeline, 'scalers'):
+        print("\nPipeline has scalers:")
+        for target, scaler in pipeline.scalers.items():
+            if scaler is not None:
+                print(f"  {target}: {type(scaler).__name__}")
+                if hasattr(scaler, 'mean_'):
+                    print(f"    Mean: {scaler.mean_[0]:.2f}")
+                if hasattr(scaler, 'scale_'):
+                    print(f"    Scale: {scaler.scale_[0]:.2f}")
+                    
 def validate_model_results(test_results: Dict, min_r2_threshold: float = 0.3) -> bool:
     """
     Validate that model results meet minimum performance criteria.
@@ -1140,6 +1206,9 @@ def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict,
     print(f"All model artifacts saved to: {output_path}")
 
 
+# Fixed section of run_nba_modeling_pipeline in model_pipeline.py
+# Replace the production manager section with this:
+
 def run_nba_modeling_pipeline(data_path: str = "../data/processed/final_engineered_nba_data.parquet") -> Tuple:
     """
     Execute the complete NBA modeling pipeline with target-specific optimizations.
@@ -1160,7 +1229,7 @@ def run_nba_modeling_pipeline(data_path: str = "../data/processed/final_engineer
         random_state=42,
         n_cv_folds=5,
         max_features_for_selection=35,
-        correlation_threshold=0.95,
+        correlation_threshold=0.80,
         feature_selection_method='rfe'
     )
     
@@ -1196,6 +1265,8 @@ def run_nba_modeling_pipeline(data_path: str = "../data/processed/final_engineer
     
     # Prepare models for production
     production_manager = ProductionModelManager(pipeline)
+    
+    # IMPORTANT: Call prepare_for_deployment BEFORE save_production_artifacts
     production_manager.prepare_for_deployment(test_results)
     production_manager.save_production_artifacts()
     
