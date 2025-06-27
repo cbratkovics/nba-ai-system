@@ -1,1217 +1,634 @@
+"""
+NBA Player Performance Prediction - Reporting Module
+
+A comprehensive reporting and visualization framework for NBA player performance 
+prediction results. This module generates professional-quality visualizations,
+statistical analyses, and summary reports for model evaluation and presentation.
+
+Author: Christopher Bratkovics
+Date: 2025
+Description: This module handles all aspects of results reporting including
+             model performance comparisons, feature importance analysis,
+             residual diagnostics, and executive summary generation.
+"""
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any
 from datetime import datetime
-import json
-import matplotlib.patches as patches
-from matplotlib.patches import Rectangle
 from pathlib import Path
 
-# Suppress warnings for cleaner output in presentation settings
+# Suppress warnings to ensure clean output in reports
 warnings.filterwarnings('ignore')
 
-# Professional color palette designed for colorblind accessibility
+# Configure matplotlib for professional publication-quality plots
+plt.style.use('seaborn-v0_8-whitegrid')
+plt.rcParams.update({
+    'figure.dpi': 300,           # High resolution for presentations
+    'savefig.dpi': 300,          # High resolution for saved files
+    'font.size': 12,             # Base font size
+    'axes.labelsize': 12,        # Axis label font size
+    'axes.titlesize': 14,        # Subplot title font size
+    'xtick.labelsize': 10,       # X-axis tick label size
+    'ytick.labelsize': 10,       # Y-axis tick label size
+    'legend.fontsize': 10,       # Legend font size
+    'figure.facecolor': 'white', # White background
+    'axes.facecolor': 'white'    # White plot background
+})
+
+# Define professional color palette for consistent visualization styling
 COLORS = {
-    'primary_blue': '#2E86AB',       # Professional blue for primary elements
-    'success_green': '#A23B72',      # Deep magenta (colorblind safe alternative)
-    'warning_orange': '#F18F01',     # Professional orange for warnings
-    'accent_purple': '#C73E1D',      # Deep red for accents
-    'neutral_gray': '#6C757D',       # Professional gray for text
-    'light_blue': '#87CEEB',         # Light blue for backgrounds
-    'dark_green': '#2D5A27',         # Dark green for success indicators
-    'gold': '#FFD700',               # Gold accent for rankings
-    'silver': '#C0C0C0',             # Silver for secondary rankings
-    'bronze': '#CD7F32'              # Bronze for tertiary rankings
+    'primary': '#2E86AB',      # Professional blue for main elements
+    'secondary': '#A23B72',    # Complementary purple for contrast
+    'tertiary': '#F18F01',     # Orange for additional variety
+    'success': '#27AE60',      # Green for positive indicators
+    'warning': '#F39C12',      # Orange for warnings/attention
+    'danger': '#E74C3C',       # Red for errors/critical items
+    'info': '#3498DB',         # Light blue for informational elements
+    'dark': '#2C3E50',         # Dark gray for text/borders
+    'light': '#ECF0F1'         # Light gray for backgrounds
 }
 
-# Enhanced plotting configuration for presentation-ready visuals
-try:
-    plt.rcParams.update({
-        'figure.dpi': 300,
-        'savefig.dpi': 300,
-        'font.size': 10,
-        'axes.titlesize': 14,
-        'axes.labelsize': 12,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
-        'legend.fontsize': 10,
-        'font.family': 'sans-serif',
-        'axes.spines.top': False,
-        'axes.spines.right': False,
-        'axes.grid': True,
-        'grid.alpha': 0.3,
-        'grid.linewidth': 0.5
-    })
-except Exception as e:
-    print(f"Warning: Some rcParams not set due to matplotlib version compatibility: {e}")
-    # Minimal safe configuration for older matplotlib versions
-    plt.rcParams.update({
-        'figure.dpi': 300,
-        'savefig.dpi': 300,
-        'font.size': 10
-    })
 
-class AdvancedVisualizer:
+class ModelResultsReporter:
     """
-    Generates professional-quality visualizations for NBA player performance prediction,
-    with optimized spacing, positioning, and enhanced readability for presentations.
+    A comprehensive reporting class for NBA model results visualization and analysis.
+    
+    This class handles the generation of all visual and textual reports needed
+    for presenting machine learning model results in a professional context.
+    It creates publication-quality figures and detailed statistical summaries.
+    
+    Attributes:
+        output_dir (Path): Directory for saving visualization files
+        reports_dir (Path): Directory for saving text reports and CSV files
     """
     
-    def __init__(self, pipeline, interpreter):
+    def __init__(self, output_dir: str = "../outputs/visuals/reporting_results"):
         """
-        Initializes the visualizer with model pipeline and interpreter objects.
-        Creates output directories for saving visualization files and reports.
-        """
-        self.pipeline = pipeline
-        self.interpreter = interpreter
-        self.y_test = None
+        Initialize the reporter with specified output directories.
         
-        # Create output directories for organized file management
-        self.viz_dir = Path("../outputs/visuals/reporting_results/")
-        self.viz_dir.mkdir(parents=True, exist_ok=True)
-        self.reports_dir = Path("../outputs/reports/")
+        Args:
+            output_dir: Path where visualization PNG files will be saved
+        """
+        # Set up output directories and ensure they exist
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Set up separate directory for text reports and CSV files
+        self.reports_dir = Path("../outputs/reports")
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         
-        print("Advanced Visualizer initialized for presentation-ready outputs.")
+        print(f"Model Results Reporter initialized. Output directory: {self.output_dir}")
     
-    def set_test_data(self, y_test: Dict):
+    def create_model_performance_comparison(self, test_results: Dict) -> None:
         """
-        Stores test data for precision calculations and validation metrics.
+        Generate comprehensive model performance comparison visualizations.
+        
+        Creates a multi-panel figure comparing different models across all target
+        variables using bar charts for R², MAE, and a summary panel. Also exports
+        the performance data to CSV for further analysis.
         
         Args:
-            y_test: Dictionary containing actual test values for each target variable.
+            test_results: Dictionary containing test set performance metrics
+                         Structure: {target: {model_name: {metrics}}}
         """
-        self.y_test = y_test
-    
-    def _add_external_annotation_box(self, fig, text, x_pos, y_pos, width=0.20, height=0.15, 
-                                      style='info', fontsize=10):
-        """
-        Adds an external annotation box using figure-level coordinates.
+        print("Creating model performance comparison...")
         
-        Args:
-            fig: Matplotlib figure object.
-            text: Text content for the annotation.
-            x_pos: X position in figure coordinates (0.0 to 1.0).
-            y_pos: Y position in figure coordinates (0.0 to 1.0).
-            width: Width of annotation box in figure coordinates.
-            height: Height of annotation box in figure coordinates.
-            style: Style type ('info', 'success', 'warning', 'performance').
-            fontsize: Font size for annotation text.
-        """
-        
-        # Define styling configurations with improved padding
-        style_configs = {
-            'info': dict(boxstyle='round,pad=0.6', facecolor='white', 
-                         alpha=0.95, edgecolor=COLORS['primary_blue'], linewidth=2),
-            'success': dict(boxstyle='round,pad=0.6', facecolor='#f8f9fa', 
-                            alpha=0.95, edgecolor=COLORS['success_green'], linewidth=2),
-            'warning': dict(boxstyle='round,pad=0.6', facecolor='#fff8e1', 
-                            alpha=0.95, edgecolor=COLORS['warning_orange'], linewidth=2),
-            'performance': dict(boxstyle='round,pad=0.6', facecolor='#e8f5e8', 
-                                alpha=0.95, edgecolor=COLORS['dark_green'], linewidth=2)
-        }
-        
-        bbox_props = style_configs.get(style, style_configs['info'])
-        
-        # Add annotation using figure coordinates with improved line spacing
-        fig.text(x_pos, y_pos, text, transform=fig.transFigure,
-                 verticalalignment='top', horizontalalignment='left',
-                 bbox=bbox_props, fontsize=fontsize, fontweight='normal',
-                 linespacing=1.5, wrap=True)
-    
-    def create_hero_dashboard(self, test_results: Dict, impact_metrics: Dict) -> None:
-        """
-        Creates a comprehensive executive dashboard with optimized layout and annotations.
-        
-        This method generates a comprehensive dashboard with properly positioned annotations
-        and improved readability through corrected spacing and larger fonts.
-        
-        Args:
-            test_results: Dictionary containing model performance results for each target.
-            impact_metrics: Dictionary containing calculated business impact metrics.
-        """
-        print("Creating executive dashboard...")
-        
-        # Process model metrics with comprehensive error handling
-        best_metrics = {}
-        for target, models in test_results.items():
-            if not models:
-                continue
-                
-            try:
-                # Filter to valid models with complete metrics
-                valid_models = {}
-                for model_name, metrics in models.items():
-                    if isinstance(metrics, dict) and 'r2' in metrics and 'mae' in metrics:
-                        if not np.isnan(metrics['r2']) and not np.isnan(metrics['mae']):
-                            valid_models[model_name] = metrics
-                
-                if not valid_models:
-                    continue
-                
-                # Select best performing model based on R-squared score
-                best_model_name = max(valid_models.keys(), 
-                                      key=lambda x: valid_models[x]['r2'])
-                best_model_metrics = valid_models[best_model_name]
-                
-                # Store processed metrics for dashboard display
-                best_metrics[target] = {
-                    'model': best_model_name,
-                    'r2': best_model_metrics['r2'],
-                    'mae': best_model_metrics['mae'],
-                    'rmse': best_model_metrics.get('rmse', 0)
-                }
-                
-            except Exception as e:
-                print(f"Error processing {target}: {e}")
-                continue
-        
-        if not best_metrics:
-            print("Error: No valid metrics found for dashboard creation")
-            return
-        
-        # Configure figure size and GridSpec layout for optimal spacing
-        fig = plt.figure(figsize=(24, 18))
-        fig.patch.set_facecolor('white')
-        
-        # Adjusted height ratios to give more space at the bottom for consolidated annotations
-        gs = fig.add_gridspec(4, 4, 
-                              height_ratios=[1.5, 1.2, 1.2, 1.5], # Reduced plot heights, increased bottom row height
-                              width_ratios=[1, 1, 1, 1], 
-                              left=0.05, right=0.95, top=0.92, bottom=0.08, 
-                              hspace=0.45, wspace=0.3) 
-        
-        # Set dashboard title and subtitle with improved vertical alignment
-        fig.suptitle('NBA Performance Prediction: Executive Summary', 
-                     fontsize=24, fontweight='bold', y=0.99) # Adjusted y-position for title
-        fig.text(0.5, 0.96, 'Advanced Machine Learning for Player Statistics Forecasting', # Centered subtitle, adjusted y
-                 ha='center', fontsize=16, style='italic', color=COLORS['neutral_gray']) 
-        
-        # Create performance gauges for each target variable
-        targets = ['pts', 'reb', 'ast']
-        target_names = ['POINTS', 'REBOUNDS', 'ASSISTS']
-        gauge_colors = [COLORS['primary_blue'], COLORS['success_green'], COLORS['warning_orange']]
-        
-        # Store metrics for external annotations
+        # Extract and organize performance metrics from nested results dictionary
         performance_data = []
         
-        for i, (target, target_name) in enumerate(zip(targets, target_names)):
-            ax = fig.add_subplot(gs[0, i])
-            
-            if target in best_metrics:
-                # Extract and format performance metrics
-                r2_score = best_metrics[target]['r2'] * 100
-                mae = best_metrics[target]['mae']
-                model_name = best_metrics[target]['model'].replace('_', ' ').title()
-                
-                # Store for external annotation
-                performance_data.append({
-                    'target': target_name,
-                    'r2': r2_score,
-                    'mae': mae,
-                    'model': model_name
-                })
-                
-                # Create performance gauge visualization
-                bars = ax.bar([0], [r2_score], color=gauge_colors[i], alpha=0.8, width=0.7, 
-                              edgecolor='white', linewidth=3)
-                
-                bars[0].set_linewidth(2)
-                bars[0].set_edgecolor('black')
-                
-                # Configure axis and title
-                ax.set_ylim(0, 100)
-                ax.set_xlim(-0.6, 0.6)
-                ax.set_xticks([])
-                ax.set_ylabel('Prediction Accuracy (%)', fontweight='bold', fontsize=12)
-                ax.set_title(f'{target_name} PREDICTION', fontweight='bold', fontsize=14, 
-                             color=gauge_colors[i], pad=20)
-                
-                # Display accuracy percentage
-                ax.text(0, r2_score + 3, f'{r2_score:.1f}%', 
-                        ha='center', va='bottom', fontweight='bold', fontsize=18,
-                        color=gauge_colors[i])
-                
-                # Add performance threshold reference lines
-                thresholds = [(95, 'Exceptional', COLORS['dark_green']), 
-                              (85, 'Excellent', COLORS['success_green']),
-                              (70, 'Good', COLORS['warning_orange']),
-                              (50, 'Fair', COLORS['accent_purple'])]
-                
-                for threshold, label, color in thresholds:
-                    ax.axhline(y=threshold, color=color, linestyle='--', alpha=0.6, linewidth=1)
-                
-                # Apply background color coding based on performance
-                if r2_score >= 85:
-                    ax.set_facecolor('#f8fff8')
-                elif r2_score >= 70:
-                    ax.set_facecolor('#fffef8')
-                else:
-                    ax.set_facecolor('#fff8f8')
+        for target, models in test_results.items():
+            for model_name, metrics in models.items():
+                # Ensure we have valid metric dictionaries
+                if isinstance(metrics, dict) and 'r2' in metrics:
+                    performance_data.append({
+                        'Target': target.upper(),
+                        'Model': model_name.replace('_', ' ').title(),
+                        'R²': metrics['r2'],
+                        'MAE': metrics['mae'],
+                        'RMSE': metrics.get('rmse', 0)
+                    })
         
-        # Create business impact visualization (using dynamic data)
-        ax1 = fig.add_subplot(gs[1, :2])
+        # Check if we have valid data to visualize
+        if not performance_data:
+            print("No valid performance data found.")
+            return
         
-        # Define business impact categories and values dynamically
-        impact_categories = ['Fantasy\nAdvantage', 'Betting\nEdge', 'Team\nAnalytics']
-        impact_values = [
-            impact_metrics.get('fantasy_sports', {}).get('roi_improvement_pct', 0),
-            impact_metrics.get('sports_betting', {}).get('roi_boost_pct', 0),
-            impact_metrics.get('team_analytics', {}).get('competitive_advantage_pct', 0)
-        ]
-        impact_colors = [COLORS['gold'], COLORS['silver'], COLORS['bronze']]
+        # Convert to DataFrame for easier manipulation
+        df_performance = pd.DataFrame(performance_data)
         
-        # Create business impact bar chart
-        bars1 = ax1.bar(impact_categories, impact_values, color=impact_colors, 
-                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.6)
+        # Create figure with three subplots for comprehensive comparison
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        fig.suptitle('Model Performance Comparison', fontsize=16, fontweight='bold')
         
-        # Position value labels on bars
-        for bar, val in zip(bars1, impact_values):
-            height = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.7,
-                     f'+{val:.1f}%', ha='center', va='bottom', fontweight='bold', # Ensure formatting
-                     fontsize=13, color='black')
+        # Subplot 1: R² Score comparison across models and targets
+        pivot_r2 = df_performance.pivot(index='Model', columns='Target', values='R²')
+        pivot_r2.plot(kind='bar', ax=axes[0], 
+                      color=[COLORS['primary'], COLORS['secondary'], COLORS['tertiary']])
+        axes[0].set_title('R² Score by Model and Target')
+        axes[0].set_ylabel('R² Score')
+        axes[0].set_ylim(0, 1)  # R² ranges from 0 to 1
+        axes[0].legend(title='Target')
+        axes[0].grid(True, alpha=0.3)
         
-        # Configure business impact chart
-        ax1.set_title('Business Impact Analysis', fontweight='bold', fontsize=15, pad=20)
-        ax1.set_ylabel('Performance Improvement (%)', fontweight='bold', fontsize=12)
-        ax1.set_ylim(0, max(impact_values) * 1.2 if impact_values else 10)
+        # Subplot 2: Mean Absolute Error comparison
+        pivot_mae = df_performance.pivot(index='Model', columns='Target', values='MAE')
+        pivot_mae.plot(kind='bar', ax=axes[1], 
+                       color=[COLORS['primary'], COLORS['secondary'], COLORS['tertiary']])
+        axes[1].set_title('Mean Absolute Error by Model and Target')
+        axes[1].set_ylabel('MAE')
+        axes[1].legend(title='Target')
+        axes[1].grid(True, alpha=0.3)
         
-        # Create competitive comparison visualization (using dynamic data)
-        ax2 = fig.add_subplot(gs[1, 2:])
+        # Subplot 3: Best model summary text panel
+        axes[2].axis('off')
+        best_models_text = "BEST MODELS BY TARGET:\n\n"
         
-        # Calculate average reliability across all models
-        our_reliability = impact_metrics.get('overall_metrics', {}).get('our_accuracy_pct', 79.3)
-            
-        # Define comparison data (hardcoded baselines for comparative purposes)
-        comparison_models = ['Our Model', 'Industry\nStandard', 'Expert\nPredictions']
-        reliability_scores = [our_reliability, 45.2, 38.7] # Industry baselines kept hardcoded as they are comparative
-        comparison_colors = [COLORS['primary_blue'], COLORS['neutral_gray'], COLORS['accent_purple']]
+        # Identify and summarize the best performing model for each target
+        for target in df_performance['Target'].unique():
+            target_data = df_performance[df_performance['Target'] == target]
+            best_model = target_data.loc[target_data['R²'].idxmax()]
+            best_models_text += f"{target}:\n"
+            best_models_text += f"  Model: {best_model['Model']}\n"
+            best_models_text += f"  R² = {best_model['R²']:.3f}\n"
+            best_models_text += f"  MAE = {best_model['MAE']:.2f}\n\n"
         
-        # Create competitive comparison chart
-        bars2 = ax2.bar(comparison_models, reliability_scores, color=comparison_colors, 
-                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.6)
+        # Add text to the summary panel with professional formatting
+        axes[2].text(0.1, 0.9, best_models_text, transform=axes[2].transAxes,
+                     fontsize=12, verticalalignment='top',
+                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
-        # Position reliability score labels
-        for bar, val in zip(bars2, reliability_scores):
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + 1.5,
-                     f'{val:.1f}%', ha='center', va='bottom', fontweight='bold', 
-                     fontsize=13, color='black')
+        plt.tight_layout()
         
-        # Configure competitive comparison chart
-        ax2.set_title('Competitive Advantage Analysis', fontweight='bold', fontsize=15, pad=20)
-        ax2.set_ylabel('Prediction Reliability (%)', fontweight='bold', fontsize=12)
-        ax2.set_ylim(0, 100)
-        
-        # Create strategic metrics overview (using dynamic data)
-        ax3 = fig.add_subplot(gs[2, :])
-        
-        # Define strategic performance metrics dynamically
-        strategic_accuracy = impact_metrics.get('overall_metrics', {}).get('our_accuracy_pct', 79.3)
-        data_quality_score = 96.2 # Assuming this is a fixed assessment score
-        model_reliability_score = impact_metrics.get('overall_metrics', {}).get('reliability_score', 91.8)
-        market_readiness_score = 87.3 # Assuming this is a fixed assessment score
-        competitive_advantage_score = impact_metrics.get('team_analytics', {}).get('competitive_advantage_pct', 11.3) + 75 # Adjusted to be in 0-100 range for dashboard
-
-        strategy_metrics = ['Prediction\nAccuracy', 'Data\nQuality', 'Model\nReliability', 
-                            'Market\nReadiness', 'Competitive\nAdvantage']
-        strategy_scores = [strategic_accuracy, data_quality_score, model_reliability_score, 
-                           market_readiness_score, competitive_advantage_score]
-        strategy_colors = [COLORS['primary_blue'], COLORS['success_green'], COLORS['warning_orange'], 
-                           COLORS['accent_purple'], COLORS['dark_green']]
-        
-        # Create strategic metrics visualization
-        bars3 = ax3.bar(strategy_metrics, strategy_scores, color=strategy_colors, 
-                        alpha=0.85, edgecolor='black', linewidth=1.5, width=0.7)
-        
-        # Position metric value labels
-        for bar, val in zip(bars3, strategy_scores):
-            height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + 1.5,
-                     f'{val:.0f}', ha='center', va='bottom', fontweight='bold', 
-                     fontsize=12, color='black')
-        
-        # Configure strategic metrics chart
-        ax3.set_title('Strategic Performance Metrics', fontweight='bold', fontsize=15, pad=20)
-        ax3.set_ylabel('Performance Score', fontweight='bold', fontsize=12)
-        ax3.set_ylim(0, 100)
-        
-        # ============ CONSOLIDATED BOTTOM ANNOTATION AREA (SPLIT INTO MULTIPLE BOXES) ============
-        # Create a nested GridSpec for the bottom row (gs[3, :]) to hold multiple annotation boxes
-        gs_bottom_annotations = gs[3, :].subgridspec(1, 3, wspace=0.15) # 1 row, 3 columns, with some space
-
-        # Annotation 1: Executive Summary / Overall Performance
-        ax_summary_anno = fig.add_subplot(gs_bottom_annotations[0, 0])
-        ax_summary_anno.axis('off') # Hide axes for this text-only subplot
-        summary_metrics = [] 
-        for target in targets:
-            if target in best_metrics:
-                r2 = best_metrics[target]['r2']
-                mae = best_metrics[target]['mae']
-                summary_metrics.append(f"{target.upper()}: {r2*100:.1f}% accuracy (±{mae:.1f})")
-
-        executive_summary_content = f"""
-OVERALL SYSTEM SUMMARY
-
-PERFORMANCE: {' | '.join(summary_metrics)}
-
-BUSINESS VALUE: USD {impact_metrics.get('fantasy_sports', {}).get('addressable_market_millions', 0):.1f}M+ market opportunity | {impact_metrics.get('fantasy_sports', {}).get('roi_improvement_pct', 0):.1f}% fantasy advantage | Production ready
-COMPETITIVE EDGE: {our_reliability:.1f}% accuracy | {impact_metrics.get('overall_metrics', {}).get('reliability_score', 0):.1f}% reliability | Industry-leading performance
-VALIDATION: Rigorous testing | Time-series validation | Data leakage prevention
-"""
-        ax_summary_anno.text(0.5, 0.5, executive_summary_content.strip(), transform=ax_summary_anno.transAxes, 
-                             ha='center', va='center', fontsize=9, fontweight='normal',
-                             bbox=dict(boxstyle='round,pad=0.5', facecolor='#f0f8ff', 
-                                       alpha=0.9, edgecolor=COLORS['primary_blue'], linewidth=1.5),
-                             linespacing=1.3, wrap=True)
-
-        # Annotation 2: Model Performance Details & Market Opportunity/Competitive Advantages
-        ax_perf_market_anno = fig.add_subplot(gs_bottom_annotations[0, 1])
-        ax_perf_market_anno.axis('off')
-        model_performance_details = "MODEL PERFORMANCE DETAILS:\n"
-        for data in performance_data:
-            quality = ("Exceptional" if data['r2'] >= 95 else "Excellent" if data['r2'] >= 85 
-                       else "Good" if data['r2'] >= 70 else "Fair")
-            model_performance_details += f"  {data['target']}: Model: {data['model']}, Accuracy: {data['r2']:.1f}%, Error: ±{data['mae']:.1f}, Quality: {quality}\n"
-        
-        market_competitive_advantages = (
-            "\nMARKET OPPORTUNITY & ADVANTAGES:\n"
-            f"• USD {impact_metrics.get('fantasy_sports', {}).get('addressable_market_millions', 0):.1f}M+ Addressable Market\n"
-            f"• {impact_metrics.get('overall_metrics', {}).get('reliability_score', 0):.1f}% Prediction Reliability\n"
-            "• Real-time Deployment Ready\n"
-            "• Multi-stakeholder Value\n"
-            f"• +{our_reliability - 45.2:.1f}% vs Industry Standard\n" 
-            f"• +{our_reliability - 38.7:.1f}% vs Expert Predictions\n" 
-            "• Market Leadership Position\n"
-            "• Production Architecture\n"
-        )
-        combined_perf_market_text = f"{model_performance_details.strip()}\n\n{market_competitive_advantages.strip()}"
-        ax_perf_market_anno.text(0.5, 0.5, combined_perf_market_text, transform=ax_perf_market_anno.transAxes, 
-                                ha='center', va='center', fontsize=9, fontweight='normal',
-                                bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', 
-                                          alpha=0.9, edgecolor=COLORS['success_green'], linewidth=1.5),
-                                linespacing=1.3, wrap=True)
-
-        # Annotation 3: Key Achievements & Deployment Status
-        ax_achievements_anno = fig.add_subplot(gs_bottom_annotations[0, 2])
-        ax_achievements_anno.axis('off')
-        achievements_deployment = (
-            "KEY ACHIEVEMENTS:\n"
-            "• 169,161 Games Analyzed\n"
-            "• Chronological Validation\n"
-            "• Production Architecture\n"
-            "• Statistical Significance\n"
-            "• Data Leakage Prevention\n"
-            "\nDEPLOYMENT STATUS:\n"
-            "• Models Production Ready\n"
-            "• API Infrastructure Built\n"
-            "• Real-time Predictions\n"
-            "• Scalable Architecture\n"
-        )
-        ax_achievements_anno.text(0.5, 0.5, achievements_deployment.strip(), transform=ax_achievements_anno.transAxes, 
-                                ha='center', va='center', fontsize=9, fontweight='normal',
-                                bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
-                                          alpha=0.9, edgecolor=COLORS['primary_blue'], linewidth=1.5), # Changed from COLORS['info']
-                                linespacing=1.3, wrap=True)
-        
-        plt.tight_layout(rect=[0, 0, 1, 1]) # Ensure the whole figure is used for layout
-        
-        # Save figure with appropriate padding
-        filename = self.viz_dir / f"hero_dashboard.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white', 
-                    edgecolor='none', pad_inches=0.5)
-        print(f"Executive dashboard saved to: {filename}")
-        
-        plt.close()
-
-    def create_stakeholder_dashboard(self, impact_metrics: Dict) -> None:
-        """
-        Creates a stakeholder value dashboard with optimized layout and annotations.
-        
-        Args:
-            impact_metrics: Dictionary containing calculated business impact metrics.
-        """
-        print("Creating stakeholder value dashboard...")
-        
-        # Safely extract impact metrics with default values
-        def safe_get(d, key, default=0):
-            try:
-                return d.get(key, default) if isinstance(d, dict) else default
-            except (AttributeError, KeyError):
-                return default
-        
-        # Define stakeholder-specific metrics and values dynamically
-        stakeholder_data = {
-            'Fantasy Managers': {
-                'Win Rate': safe_get(impact_metrics.get('fantasy_sports', {}), 'season_win_improvement', 0),
-                'ROI Gain': safe_get(impact_metrics.get('fantasy_sports', {}), 'roi_improvement_pct', 0),
-                'Weekly Edge': safe_get(impact_metrics.get('fantasy_sports', {}), 'weekly_lineup_advantage', 0),
-                'Market Value': safe_get(impact_metrics.get('fantasy_sports', {}), 'addressable_market_millions', 0)
-            },
-            'Sports Bettors': {
-                'Break Even': safe_get(impact_metrics.get('sports_betting', {}), 'break_even_improvement', 0),
-                'ROI Boost': safe_get(impact_metrics.get('sports_betting', {}), 'roi_boost_pct', 0),
-                'Edge (bp)': safe_get(impact_metrics.get('sports_betting', {}), 'edge_basis_points', 0) / 10, # Adjusted to be in the same scale as others
-                'Annual Value': safe_get(impact_metrics.get('sports_betting', {}), 'annual_value_millions', 0)
-            },
-            'NBA Teams': {
-                'Injury Prevention': safe_get(impact_metrics.get('team_analytics', {}), 'injury_prevention_value_millions', 0),
-                'Win Optimization': safe_get(impact_metrics.get('team_analytics', {}), 'rotation_optimization_wins', 0),
-                'Contract Accuracy': safe_get(impact_metrics.get('team_analytics', {}), 'contract_evaluation_accuracy', 0),
-                'Competitive Edge': safe_get(impact_metrics.get('team_analytics', {}), 'competitive_advantage_pct', 0)
-            },
-            'Media Partners': {
-                'Prediction Accuracy': safe_get(impact_metrics.get('overall_metrics', {}), 'our_accuracy_pct', 0),
-                'Content Value': 85.0, # This remains fixed as it's not tied to model performance directly
-                'Audience Growth': 23.4, # This remains fixed as it's not tied to model performance directly
-                'Story Precision': 92.0 # This remains fixed as it's not tied to model performance directly
-            }
-        }
-        
-        # Configure figure size and GridSpec layout to prevent overlaps
-        fig = plt.figure(figsize=(20, 18))
-        fig.patch.set_facecolor('white')
-        fig.suptitle('Stakeholder Value Proposition Dashboard', fontsize=20, fontweight='bold', y=0.97)
-        
-        gs = fig.add_gridspec(3, 2, # 3 rows for 2x2 plots and 1 large annotation row
-                              height_ratios=[2.0, 2.0, 1.5], # Adjusted ratios: more space for plots, dedicated space for annotation
-                              width_ratios=[1, 1],
-                              left=0.06, right=0.94, top=0.90, bottom=0.08,
-                              hspace=0.45, wspace=0.3)
-        
-        # Define colors for each stakeholder
-        stakeholder_colors = [COLORS['gold'], COLORS['silver'], COLORS['bronze'], COLORS['success_green']]
-        
-        # Create visualization for each stakeholder group (2x2 layout in top area)
-        stakeholder_list = list(stakeholder_data.items())
-        
-        for idx, (stakeholder, metrics) in enumerate(stakeholder_list):
-            row = idx // 2
-            col = idx % 2
-            ax = fig.add_subplot(gs[row, col])
-            
-            # Extract metric names and values
-            metric_names = list(metrics.keys())
-            metric_values = list(metrics.values())
-            
-            # Create stakeholder-specific bar chart
-            bars = ax.bar(metric_names, metric_values, color=stakeholder_colors[idx], 
-                          alpha=0.8, edgecolor='black', linewidth=1.5, width=0.7)
-            
-            # Configure chart styling and labels
-            ax.set_title(stakeholder, fontweight='bold', fontsize=16, pad=25,
-                         color=stakeholder_colors[idx])
-            ax.set_ylabel('Value Metric', fontweight='bold', fontsize=12)
-            
-            # Ensure x-axis labels are readable, reduce rotation if possible
-            ax.tick_params(axis='x', rotation=30, labelsize=10) # Slightly less rotation
-            ax.tick_params(axis='y', labelsize=10)
-            
-            # Position metric value labels on bars
-            for bar, val in zip(bars, metric_values):
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + (max(metric_values)*0.02 if metric_values else 0.5), # Handle empty list
-                        f'{val:.1f}', ha='center', va='bottom', fontweight='bold', 
-                        fontsize=11, color='black')
-            
-            # Apply professional grid and styling
-            ax.grid(axis='y', alpha=0.3, linestyle='--')
-            ax.set_axisbelow(True)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-        
-        # ============ COMPREHENSIVE ANNOTATION AREA ============
-        
-        # Single annotation in dedicated bottom row, properly spaced
-        comprehensive_annotation = ("STAKEHOLDER VALUE PROPOSITIONS:\n\n"
-                                    f"FANTASY MANAGERS: Premium lineup optimization • Season-long competitive edge • USD {impact_metrics.get('fantasy_sports', {}).get('market_size_millions', 0):.0f}B fantasy market opportunity\n"
-                                    f"SPORTS BETTORS: Statistical betting advantage • Quantified risk reduction • USD {impact_metrics.get('sports_betting', {}).get('annual_value_millions', 0):.1f}B betting market access\n" # Adjusted to Billions
-                                    "NBA TEAMS: Data-driven roster decisions • Injury prevention insights • 30 team competitive advantage\n"
-                                    "MEDIA PARTNERS: Evidence-based narratives • Audience engagement boost • Global media reach expansion\n\n"
-                                    "IMPLEMENTATION STRATEGY & ROI:\n"
-                                    f"IMMEDIATE BENEFITS: Fantasy advantage +{impact_metrics.get('fantasy_sports', {}).get('roi_improvement_pct', 0):.1f}% ROI | Betting edge {impact_metrics.get('sports_betting', {}).get('edge_basis_points', 0):.0f} basis points | Team analytics USD {impact_metrics.get('team_analytics', {}).get('injury_prevention_value_millions', 0):.1f}M savings\n"
-                                    f"COMPETITIVE MOAT: {impact_metrics.get('overall_metrics', {}).get('our_accuracy_pct', 0):.1f}% prediction accuracy vs 45% industry standard | Production-ready deployment | Real-time API\n"
-                                    "MARKET PENETRATION: Multi-stakeholder platform | Scalable architecture | Evidence-based value creation\n"
-                                    "REVENUE MODEL: Subscription tiers | Enterprise licensing | Data-as-a-Service | Premium analytics packages")
-        
-        # Use the entire bottom row for comprehensive annotation
-        ax_annotation = fig.add_subplot(gs[2, :])
-        ax_annotation.axis('off')
-        ax_annotation.text(0.5, 0.5, comprehensive_annotation, transform=ax_annotation.transAxes,
-                           ha='center', va='center', fontsize=10, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.7', facecolor='#f0f8ff', 
-                                    alpha=0.95, edgecolor=COLORS['primary_blue'], linewidth=1.5),
-                           linespacing=1.5)
-        
-        plt.tight_layout(rect=[0.05, 0.05, 0.95, 0.95]) # Adjust rect for better overall padding
-        
-        # Save figure with appropriate padding
-        filename = self.viz_dir / f"stakeholder_dashboard.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
-                    edgecolor='none', pad_inches=0.3)
-        print(f"Stakeholder dashboard saved to: {filename}")
-        
+        # Save the figure in high resolution
+        filename = self.output_dir / "model_performance_comparison.png"
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+        print(f"Saved: {filename}")
         plt.close()
         
+        # Export performance metrics to CSV for external analysis
+        csv_filename = self.reports_dir / "model_performance_metrics.csv"
+        df_performance.to_csv(csv_filename, index=False)
+        print(f"Saved performance metrics: {csv_filename}")
+    
     def create_feature_importance_plots(self, importance_results: Dict, test_results: Dict) -> None:
         """
-        Creates feature importance visualizations with consistent annotation positioning.
+        Generate feature importance visualizations for each target variable.
+        
+        Creates horizontal bar charts showing the top 15 most important features
+        for the best performing model of each target. Includes model performance
+        metrics in the title for context.
         
         Args:
-            importance_results: Dictionary containing feature importance data for each model.
-            test_results: Dictionary containing model performance metrics.
+            importance_results: Dictionary of feature importance scores by target and model
+            test_results: Dictionary of test performance metrics for model selection
         """
-        print("Creating feature importance visualizations...")
+        print("Creating feature importance plots...")
         
+        # Process each target variable separately
         for target in importance_results.keys():
-            # Identify best performing model for this target
-            best_model_name = self._get_best_model_for_target(test_results, target)
+            # Identify the best performing model for this target
+            best_model_name = None
+            best_r2 = -1
             
+            if target in test_results:
+                for model_name, metrics in test_results[target].items():
+                    if isinstance(metrics, dict) and 'r2' in metrics and metrics['r2'] > best_r2:
+                        best_r2 = metrics['r2']
+                        best_model_name = model_name
+            
+            # Skip if no valid model found
             if not best_model_name or best_model_name not in importance_results[target]:
-                if importance_results[target]:
-                    best_model_name = list(importance_results[target].keys())[0]
-                else:
-                    continue
+                continue
             
-            # Extract top 10 features for clean visualization
-            importance_df = importance_results[target][best_model_name].head(10)
-            model_name = best_model_name.replace('_', ' ').title()
+            # Extract top 15 features for visualization
+            importance_df = importance_results[target][best_model_name].head(15)
             
-            # Business context mapping for feature interpretation
-            business_context = {
-                'minutes_played': 'Playing Time (Opportunity)',
-                'fga_per_min': 'Shot Frequency (Usage)',
-                'sufficient_rest_x_minutes_played': 'Rest × Minutes (Load Mgmt)',
-                'fta_per_min': 'Free Throw Rate (Aggressiveness)', 
-                'ast_outlier_flag': 'Elite Playmaker Status',
-                'rest_days': 'Recovery Time Between Games',
-                'is_home_game': 'Home Court Advantage',
-                'minutes_played_x_rest_days': 'Rest × Minutes (Load Mgmt)',
-                'fg3a_per_min': '3-Point Usage Rate',
-                'turnover': 'Ball Security (Turnovers)',
-                'pf': 'Foul Tendency',
-                'elite_usage': 'Elite Usage Rating',
-                'good_shooting_game': 'Shooting Efficiency',
-                'efficient_game': 'Overall Efficiency',
-                'reb_outlier_flag': 'Elite Rebounder Status'
-            }
+            # Create figure with appropriate size for readability
+            fig, ax = plt.subplots(figsize=(10, 8))
             
-            # Create business-friendly feature labels
-            enhanced_features = []
-            for feature in importance_df['feature']:
-                if feature in business_context:
-                    enhanced_features.append(business_context[feature])
-                else:
-                    # Clean up technical feature names for presentation
-                    clean_name = feature.replace('_', ' ').title()
-                    enhanced_features.append(clean_name)
-            
-            # Create professional horizontal bar plot
-            fig, ax = plt.subplots(figsize=(14, 10))
-            fig.patch.set_facecolor('white')
-            
-            # Generate color gradient for visual appeal
-            n_features = len(enhanced_features)
-            colors = plt.cm.viridis(np.linspace(0.2, 0.8, n_features))
-            
-            # Create horizontal bar chart
-            y_pos = np.arange(len(enhanced_features))
+            # Generate horizontal bar plot for better feature name visibility
+            y_pos = np.arange(len(importance_df))
             bars = ax.barh(y_pos, importance_df['importance'], 
-                           color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+                           color=COLORS['primary'], alpha=0.8)
             
-            # Configure chart styling and labels
+            # Add importance scores as text labels on bars
+            for i, (idx, row) in enumerate(importance_df.iterrows()):
+                ax.text(row['importance'] + 0.001, i, f'{row["importance"]:.3f}',
+                        va='center', fontsize=10)
+            
+            # Configure plot aesthetics
             ax.set_yticks(y_pos)
-            ax.set_yticklabels(enhanced_features, fontsize=11)
-            ax.set_xlabel('Feature Importance Score (Higher = More Predictive)', 
-                          fontweight='bold', fontsize=12)
-            ax.set_title(f'{target.upper()} Feature Importance Analysis\n'
-                         f'Top 10 Predictive Factors ({model_name})', 
-                         fontweight='bold', fontsize=15, pad=20)
+            ax.set_yticklabels(importance_df['feature'])
+            ax.set_xlabel('Importance Score')
+            ax.set_title(f'{target.upper()} - Top 15 Feature Importance\n'
+                        f'Model: {best_model_name.replace("_", " ").title()} (R² = {best_r2:.3f})',
+                        fontsize=14, fontweight='bold')
+            ax.grid(True, axis='x', alpha=0.3)
             
-            # Add importance value labels on bars
-            for i, (bar, val) in enumerate(zip(bars, importance_df['importance'])):
-                width = bar.get_width()
-                ax.text(width + (max(importance_df['importance'])*0.01 if not importance_df.empty else 0.01), # Handle empty df
-                        bar.get_y() + bar.get_height()/2,
-                        f'{val:.3f}', ha='left', va='center', fontweight='bold', 
-                        fontsize=10, color='black')
+            plt.tight_layout()
             
-            # Apply professional grid and styling
-            ax.grid(axis='x', alpha=0.4, linestyle='--')
-            ax.set_axisbelow(True)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            
-            # Consistent annotation positioning (right side)
-            top_feature = enhanced_features[0] if enhanced_features else "N/A"
-            top_importance = importance_df['importance'].iloc[0] if not importance_df.empty else 0.0
-            
-            # Insights annotation - positioned on right side consistently
-            insights_text = (f'TOP PREDICTOR:\n{top_feature}\n'
-                             f'Importance: {top_importance:.3f}\n\n'
-                             f'KEY INSIGHTS:\n'
-                             f'{n_features} most important features\n'
-                             f'Load management metrics prominent\n'
-                             f'Opportunity drives performance')
-            
-            ax.text(0.98, 0.78, insights_text, transform=ax.transAxes,
-                    verticalalignment='top', horizontalalignment='right', # Changed to 'right' alignment
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
-                              alpha=0.92, edgecolor=COLORS['primary_blue'], linewidth=1.2),
-                    fontsize=8, fontweight='normal', linespacing=1.2)
-            
-            # Model performance annotation - positioned at top right consistently
-            if target in test_results and best_model_name in test_results[target]:
-                model_perf = test_results[target][best_model_name]
-                perf_text = (f'MODEL PERFORMANCE:\n'
-                             f'R² Score: {model_perf["r2"]:.3f}\n'
-                             f'Mean Error: ±{model_perf["mae"]:.1f}\n'
-                             f'Quality: {"Excellent" if model_perf["r2"] > 0.8 else "Good" if model_perf["r2"] > 0.6 else "Fair"}')
-                
-                ax.text(0.98, 0.98, perf_text, transform=ax.transAxes,
-                        verticalalignment='top', horizontalalignment='right', # Changed to 'right' alignment
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='#e8f5e8', 
-                                  alpha=0.92, edgecolor=COLORS['dark_green'], linewidth=1.2),
-                        fontsize=8, fontweight='normal', linespacing=1.2)
-            
-            plt.tight_layout(pad=2.0)
-            
-            # Save feature importance plot
-            filename = self.viz_dir / f"feature_importance_{target}.png"
-            plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
-                        edgecolor='none', pad_inches=0.2)
-            print(f"Feature importance plot for {target.upper()} saved to: {filename}")
-            
+            # Save figure with descriptive filename
+            filename = self.output_dir / f"feature_importance_{target}.png"
+            plt.savefig(filename, bbox_inches='tight', dpi=300)
+            print(f"Saved: {filename}")
             plt.close()
-
-    def create_prediction_analysis(self, test_results: Dict, y_test: Dict) -> None:
+            
+            # Export feature importance data for further analysis
+            csv_filename = self.reports_dir / f"feature_importance_{target}.csv"
+            importance_df.to_csv(csv_filename, index=False)
+    
+    def create_residual_analysis(self, test_results: Dict, y_test: Dict) -> None:
         """
-        Creates prediction vs actual analysis with consistent annotation positioning.
+        Create residual analysis plots to diagnose model performance patterns.
+        
+        Generates scatter plots of residuals vs predicted values to check for
+        heteroscedasticity, bias, and other systematic patterns. Includes
+        statistical summaries and trend lines for comprehensive analysis.
         
         Args:
-            test_results: Dictionary containing model predictions and performance metrics.
-            y_test: Dictionary containing actual test values for validation.
+            test_results: Dictionary containing model predictions and metrics
+            y_test: Dictionary of actual test set values by target
         """
-        print("Creating prediction accuracy analysis...")
+        print("Creating residual analysis plots...")
         
+        # Set up subplots for each target variable
         n_targets = len(y_test)
-        fig, axes = plt.subplots(1, n_targets, figsize=(7*n_targets, 8))
-        fig.patch.set_facecolor('white')
-        
+        fig, axes = plt.subplots(1, n_targets, figsize=(6*n_targets, 5))
         if n_targets == 1:
             axes = [axes]
         
-        fig.suptitle('Prediction Accuracy Analysis - Best Performing Models', 
-                     fontsize=16, fontweight='bold', y=0.95)
+        fig.suptitle('Residual Analysis - Best Models', fontsize=16, fontweight='bold')
         
-        target_colors = [COLORS['primary_blue'], COLORS['success_green'], COLORS['warning_orange']]
+        # Track residual statistics for reporting
+        residual_stats = []
         
+        # Analyze residuals for each target
         for i, target in enumerate(y_test.keys()):
-            try:
-                # Filter to models with complete prediction data
-                valid_models = {k: v for k, v in test_results[target].items() 
-                                if isinstance(v, dict) and 'r2' in v and 'predictions' in v}
-                
-                if not valid_models:
-                    print(f"No valid models with predictions found for {target}. Skipping prediction analysis.")
-                    axes[i].set_title(f'{target.upper()} Prediction Accuracy (No Data)', fontsize=14, color=COLORS['neutral_gray'])
-                    axes[i].text(0.5, 0.5, "No data available for this target.", ha='center', va='center', transform=axes[i].transAxes)
-                    continue
-                    
-                # Select best performing model
-                best_model = max(valid_models, key=lambda x: valid_models[x]['r2'])
-                best_metrics = valid_models[best_model]
-                
-                # Extract actual and predicted values
-                actual = y_test[target]
-                predicted = best_metrics['predictions']
-                
-                # Ensure actual and predicted have the same length and are not empty
-                # Using len() == 0 for numpy arrays instead of .empty
-                if len(actual) == 0 or len(predicted) == 0 or len(actual) != len(predicted):
-                    print(f"Mismatched or empty actual/predicted data for {target}. Skipping plot.")
-                    axes[i].set_title(f'{target.upper()} Prediction Accuracy (Data Mismatch)', fontsize=14, color=COLORS['neutral_gray'])
-                    axes[i].text(0.5, 0.5, "Data mismatch or empty.", ha='center', va='center', transform=axes[i].transAxes)
-                    continue
-
-                # Create scatter plot with professional styling
-                scatter = axes[i].scatter(actual, predicted, alpha=0.6, s=50, 
-                                          c=target_colors[i % len(target_colors)], 
-                                          edgecolors='white', linewidth=0.8)
-                
-                # Add perfect prediction reference line
-                min_val = min(actual.min(), predicted.min())
-                max_val = max(actual.max(), predicted.max())
-                
-                # Add a small buffer if min_val and max_val are too close (e.g., all values are same)
-                if abs(max_val - min_val) < 1e-6: # Check if range is effectively zero
-                    buffer = 0.1 * abs(min_val) if abs(min_val) > 0 else 1.0 # Add a relative or absolute buffer
-                    min_val -= buffer
-                    max_val += buffer
-
-                axes[i].plot([min_val, max_val], [min_val, max_val], 
-                             color='red', linewidth=3, linestyle='--', 
-                             label='Perfect Prediction', alpha=0.9)
-                
-                # Calculate comprehensive performance metrics
-                r2_score = best_metrics['r2']
-                mae = best_metrics['mae']
-                rmse = best_metrics.get('rmse', np.sqrt(((actual - predicted)**2).mean()))
-                
-                # Performance annotation - consistent positioning (top-left for scatter plots)
-                main_annotation = (f'PERFORMANCE METRICS:\n'
-                                   f'Accuracy (R²): {r2_score:.3f}\n'
-                                   f'Typical Error: ±{mae:.1f} {target}\n'
-                                   f'RMSE: {rmse:.2f}\n'
-                                   f'Model: {best_model.replace("_", " ").title()}')
-                
-                axes[i].text(0.02, 0.98, main_annotation, transform=axes[i].transAxes, 
-                             verticalalignment='top', horizontalalignment='left',
-                             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
-                                       alpha=0.92, edgecolor=COLORS['primary_blue'], linewidth=1.2),
-                             fontsize=8, fontweight='normal', linespacing=1.2)
-                
-                # Generate business interpretation
-                if r2_score >= 0.85:
-                    quality = "Exceptional"
-                    business_note = "Deployment ready\nHigh confidence decisions"
-                    style_color = COLORS['dark_green']
-                    bg_color = '#e8f5e8'
-                elif r2_score >= 0.7:
-                    quality = "Excellent"
-                    business_note = "Production suitable\nReliable predictions"
-                    style_color = COLORS['success_green']
-                    bg_color = '#f8f9fa'
-                elif r2_score >= 0.5:
-                    quality = "Good"
-                    business_note = "Operationally useful\nStrategic planning ready"
-                    style_color = COLORS['warning_orange']
-                    bg_color = '#fff8e1'
-                else:
-                    quality = "Fair"
-                    business_note = "Trend analysis suitable\nRequires improvement"
-                    style_color = COLORS['warning_orange']
-                    bg_color = '#fff8e1'
-                
-                # Business assessment annotation with consistent positioning
-                business_annotation = (f'BUSINESS ASSESSMENT:\n'
-                                       f'Quality: {quality}\n'
-                                       f'Precision: ±{mae:.1f} {target}/game\n'
-                                       f'{business_note}\n'
-                                       f'Sample: {len(actual):,} games')
-                
-                axes[i].text(0.02, 0.85, business_annotation, transform=axes[i].transAxes,
-                             verticalalignment='top', horizontalalignment='left',
-                             bbox=dict(boxstyle='round,pad=0.3', facecolor=bg_color, 
-                                       alpha=0.92, edgecolor=style_color, linewidth=1.2),
-                             fontsize=8, fontweight='normal', linespacing=1.2)
-                
-                # Configure axis labels and styling
-                axes[i].set_xlabel(f'Actual {target.upper()}', fontweight='bold', fontsize=12)
-                axes[i].set_ylabel(f'Predicted {target.upper()}', fontweight='bold', fontsize=12)
-                axes[i].set_title(f'{target.upper()} Prediction Accuracy', 
-                                   fontweight='bold', fontsize=14, pad=15,
-                                   color=target_colors[i % len(target_colors)])
-                
-                # Apply professional styling
-                axes[i].grid(True, alpha=0.3, linestyle='--')
-                axes[i].legend(loc='lower right', fontsize=10)
-                axes[i].set_aspect('equal', adjustable='box')
-                axes[i].spines['top'].set_visible(False)
-                axes[i].spines['right'].set_visible(False)
-                
-            except Exception as e:
-                print(f"Error processing {target} for prediction analysis: {e}")
-                # Fallback to display error message on subplot
-                axes[i].set_title(f'{target.upper()} Prediction Accuracy (Error)', fontsize=14, color=COLORS['neutral_gray'])
-                axes[i].text(0.5, 0.5, f"Error: {str(e)}", ha='center', va='center', transform=axes[i].transAxes, wrap=True)
+            if target not in test_results:
                 continue
+            
+            # Find the best performing model for this target
+            best_model = None
+            best_r2 = -1
+            
+            for model_name, metrics in test_results[target].items():
+                if isinstance(metrics, dict) and 'r2' in metrics and 'predictions' in metrics:
+                    if metrics['r2'] > best_r2:
+                        best_r2 = metrics['r2']
+                        best_model = model_name
+                        best_metrics = metrics
+            
+            if best_model is None:
+                continue
+            
+            # Calculate residuals (actual - predicted)
+            actual = y_test[target]
+            predicted = best_metrics['predictions']
+            residuals = actual - predicted
+            
+            # Create residual scatter plot
+            ax = axes[i]
+            scatter = ax.scatter(predicted, residuals, alpha=0.5, s=20, 
+                                color=COLORS['primary'])
+            
+            # Add reference line at y=0 for perfect predictions
+            ax.axhline(y=0, color='red', linestyle='--', linewidth=2)
+            
+            # Add trend line to detect systematic bias
+            z = np.polyfit(predicted, residuals, 1)
+            p = np.poly1d(z)
+            ax.plot(sorted(predicted), p(sorted(predicted)), 
+                   color=COLORS['warning'], linewidth=2, alpha=0.8)
+            
+            # Calculate and display residual statistics
+            residual_mean = np.mean(residuals)
+            residual_std = np.std(residuals)
+            
+            # Add statistics annotation to plot
+            stats_text = f'Mean: {residual_mean:.3f}\nStd: {residual_std:.3f}'
+            ax.text(0.05, 0.95, stats_text, transform=ax.transAxes,
+                   verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+            
+            # Configure plot labels and styling
+            ax.set_xlabel(f'Predicted {target.upper()}')
+            ax.set_ylabel('Residuals')
+            ax.set_title(f'{target.upper()} - {best_model.replace("_", " ").title()}')
+            ax.grid(True, alpha=0.3)
+            
+            # Store statistics for export
+            residual_stats.append({
+                'Target': target.upper(),
+                'Model': best_model,
+                'Residual_Mean': residual_mean,
+                'Residual_Std': residual_std,
+                'R²': best_r2
+            })
         
-        plt.tight_layout(pad=2.0)
+        plt.tight_layout()
         
-        # Save prediction analysis visualization
-        filename = self.viz_dir / f"prediction_analysis.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white',
-                    edgecolor='none', pad_inches=0.2)
-        print(f"Prediction analysis saved to: {filename}")
+        # Save residual analysis figure
+        filename = self.output_dir / "residual_analysis.png"
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+        print(f"Saved: {filename}")
+        plt.close()
         
+        # Export residual statistics to CSV
+        if residual_stats:
+            df_residuals = pd.DataFrame(residual_stats)
+            csv_filename = self.reports_dir / "residual_statistics.csv"
+            df_residuals.to_csv(csv_filename, index=False)
+            print(f"Saved residual statistics: {csv_filename}")
+    
+    def create_prediction_scatter_plots(self, test_results: Dict, y_test: Dict) -> None:
+        """
+        Create actual vs predicted scatter plots for model evaluation.
+        
+        Generates scatter plots comparing actual and predicted values with
+        perfect prediction reference lines. Includes performance metrics
+        for quick assessment of model accuracy.
+        
+        Args:
+            test_results: Dictionary containing model predictions and metrics
+            y_test: Dictionary of actual test set values by target
+        """
+        print("Creating prediction accuracy plots...")
+        
+        # Set up subplots for each target
+        n_targets = len(y_test)
+        fig, axes = plt.subplots(1, n_targets, figsize=(6*n_targets, 5))
+        if n_targets == 1:
+            axes = [axes]
+        
+        fig.suptitle('Actual vs Predicted Values - Best Models', fontsize=16, fontweight='bold')
+        
+        # Create scatter plot for each target
+        for i, target in enumerate(y_test.keys()):
+            if target not in test_results:
+                continue
+            
+            # Identify best performing model
+            best_model = None
+            best_r2 = -1
+            
+            for model_name, metrics in test_results[target].items():
+                if isinstance(metrics, dict) and 'r2' in metrics and 'predictions' in metrics:
+                    if metrics['r2'] > best_r2:
+                        best_r2 = metrics['r2']
+                        best_model = model_name
+                        best_metrics = metrics
+            
+            if best_model is None:
+                continue
+            
+            # Extract actual and predicted values
+            actual = y_test[target]
+            predicted = best_metrics['predictions']
+            
+            # Create scatter plot with semi-transparent points
+            ax = axes[i]
+            ax.scatter(actual, predicted, alpha=0.5, s=30, color=COLORS['primary'])
+            
+            # Add diagonal line representing perfect predictions
+            min_val = min(actual.min(), predicted.min())
+            max_val = max(actual.max(), predicted.max())
+            ax.plot([min_val, max_val], [min_val, max_val], 
+                   'r--', linewidth=2, label='Perfect Prediction')
+            
+            # Add performance metrics annotation
+            metrics_text = f'R² = {best_r2:.3f}\nMAE = {best_metrics["mae"]:.2f}'
+            ax.text(0.05, 0.95, metrics_text, transform=ax.transAxes,
+                   verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+            
+            # Configure plot aesthetics
+            ax.set_xlabel(f'Actual {target.upper()}')
+            ax.set_ylabel(f'Predicted {target.upper()}')
+            ax.set_title(f'{target.upper()} - {best_model.replace("_", " ").title()}')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            # Ensure square aspect ratio for fair comparison
+            ax.set_aspect('equal', adjustable='box')
+        
+        plt.tight_layout()
+        
+        # Save scatter plot figure
+        filename = self.output_dir / "prediction_scatter_plots.png"
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+        print(f"Saved: {filename}")
+        plt.close()
+    
+    def generate_summary_report(self, test_results: Dict, importance_results: Dict) -> None:
+        """
+        Generate a comprehensive text summary of all model results.
+        
+        Creates a formatted text report including model performance metrics,
+        feature importance rankings, key insights, and recommendations for
+        improvement. Saved as both console output and text file.
+        
+        Args:
+            test_results: Dictionary of model performance metrics
+            importance_results: Dictionary of feature importance scores
+        """
+        print("Generating summary report...")
+        
+        # Initialize report content
+        report_lines = []
+        report_lines.append("NBA PLAYER PERFORMANCE PREDICTION - MODEL RESULTS SUMMARY")
+        report_lines.append("=" * 60)
+        report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_lines.append("")
+        
+        # Section 1: Model Performance Summary
+        report_lines.append("MODEL PERFORMANCE SUMMARY")
+        report_lines.append("-" * 30)
+        
+        # Summarize performance for each target variable
+        for target, models in test_results.items():
+            report_lines.append(f"\n{target.upper()}:")
+            
+            # Track best model for this target
+            best_model = None
+            best_r2 = -1
+            
+            # Report metrics for each model
+            for model_name, metrics in models.items():
+                if isinstance(metrics, dict) and 'r2' in metrics:
+                    report_lines.append(f"  {model_name.replace('_', ' ').title()}:")
+                    report_lines.append(f"    R² = {metrics['r2']:.3f}")
+                    report_lines.append(f"    MAE = {metrics['mae']:.2f}")
+                    report_lines.append(f"    RMSE = {metrics.get('rmse', 'N/A')}")
+                    
+                    # Update best model tracking
+                    if metrics['r2'] > best_r2:
+                        best_r2 = metrics['r2']
+                        best_model = model_name
+            
+            # Highlight best performing model
+            if best_model:
+                report_lines.append(f"  BEST MODEL: {best_model.replace('_', ' ').title()} (R² = {best_r2:.3f})")
+        
+        # Section 2: Feature Importance Summary
+        report_lines.append("\n\nTOP PREDICTIVE FEATURES")
+        report_lines.append("-" * 30)
+        
+        # Report top features for each target
+        for target in importance_results.keys():
+            report_lines.append(f"\n{target.upper()} - Top 5 Features:")
+            
+            # Find and report top features from best model
+            for model_name, importance_df in importance_results[target].items():
+                if not importance_df.empty:
+                    top_features = importance_df.head(5)
+                    for idx, row in top_features.iterrows():
+                        report_lines.append(f"  {row['feature']}: {row['importance']:.3f}")
+                    break
+        
+        # Section 3: Key Insights
+        report_lines.append("\n\nKEY INSIGHTS")
+        report_lines.append("-" * 30)
+        report_lines.append("1. Playing time (minutes) is consistently the top predictor")
+        report_lines.append("2. Load management features (rest × minutes) show high importance")
+        report_lines.append("3. Random Forest models perform best for points and rebounds")
+        report_lines.append("4. Model accuracy: Points > Rebounds ≈ Assists")
+        
+        # Section 4: Areas for Improvement
+        report_lines.append("\n\nAREAS FOR IMPROVEMENT")
+        report_lines.append("-" * 30)
+        report_lines.append("1. Consider opponent defensive metrics")
+        report_lines.append("2. Add player momentum/streak features")
+        report_lines.append("3. Incorporate team performance context")
+        report_lines.append("4. Address heteroscedasticity in residuals")
+        
+        # Save report to file
+        report_content = "\n".join(report_lines)
+        report_filename = self.reports_dir / "model_results_summary.txt"
+        with open(report_filename, 'w') as f:
+            f.write(report_content)
+        print(f"Saved summary report: {report_filename}")
+        
+        # Also display report in console for immediate review
+        print("\n" + report_content)
+    
+    def create_model_comparison_heatmap(self, test_results: Dict) -> None:
+        """
+        Create a heatmap visualization showing model performance across all targets.
+        
+        Generates a color-coded matrix where rows are models and columns are
+        target variables, with R² scores as values. Provides quick visual
+        comparison of model effectiveness across different prediction tasks.
+        
+        Args:
+            test_results: Dictionary of model performance metrics
+        """
+        print("Creating model comparison heatmap...")
+        
+        # Extract unique models and targets from results
+        models = set()
+        targets = list(test_results.keys())
+        
+        # Collect all unique model names
+        for target, model_dict in test_results.items():
+            models.update(model_dict.keys())
+        
+        models = sorted(list(models))
+        
+        # Initialize R² score matrix with NaN for missing combinations
+        r2_matrix = np.full((len(models), len(targets)), np.nan)
+        
+        # Populate matrix with actual R² scores
+        for j, target in enumerate(targets):
+            for i, model in enumerate(models):
+                if model in test_results[target] and isinstance(test_results[target][model], dict):
+                    r2_matrix[i, j] = test_results[target][model].get('r2', np.nan)
+        
+        # Create heatmap visualization
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Create mask for missing values (NaN)
+        mask = np.isnan(r2_matrix)
+        
+        # Generate heatmap with professional styling
+        sns.heatmap(r2_matrix, 
+                    xticklabels=[t.upper() for t in targets],
+                    yticklabels=[m.replace('_', ' ').title() for m in models],
+                    annot=True,           # Show values in cells
+                    fmt='.3f',            # Format to 3 decimal places
+                    cmap='RdYlGn',        # Red-Yellow-Green colormap
+                    vmin=0,               # Minimum value for color scale
+                    vmax=1,               # Maximum value for color scale
+                    mask=mask,            # Hide NaN values
+                    cbar_kws={'label': 'R² Score'},
+                    ax=ax)
+        
+        # Add title with appropriate spacing
+        ax.set_title('Model Performance Comparison (R² Scores)', 
+                     fontsize=16, fontweight='bold', pad=20)
+        
+        plt.tight_layout()
+        
+        # Save heatmap figure
+        filename = self.output_dir / "model_comparison_heatmap.png"
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+        print(f"Saved: {filename}")
         plt.close()
 
-    def _get_best_model_for_target(self, test_results: Dict, target: str) -> str:
-        """
-        Identifies the best performing model for a specific target variable based on R-squared score.
-        
-        Args:
-            test_results: Dictionary containing model performance results.
-            target: Target variable name (pts, reb, ast).
-            
-        Returns:
-            String name of best performing model, or None if no valid models found.
-        """
-        if target not in test_results or not test_results[target]:
-            return None
-        
-        # Filter to models with valid R-squared scores
-        valid_models = {k: v for k, v in test_results[target].items() 
-                        if isinstance(v, dict) and 'r2' in v and not np.isnan(v['r2'])}
-        
-        if not valid_models:
-            return None
-        
-        # Return model with highest R-squared score
-        best_model = max(valid_models.keys(), key=lambda x: valid_models[x]['r2'])
-        return best_model
 
-    def calculate_business_impact(self, test_results: Dict) -> Dict:
-        """
-        Converts model accuracy metrics into quantified business value across stakeholder groups.
-        
-        This method translates technical model performance into concrete business impacts
-        including market opportunities, ROI improvements, and competitive advantages
-        for different stakeholder categories.
-        
-        Args:
-            test_results: Dictionary containing model performance metrics.
-            
-        Returns:
-            Dictionary containing comprehensive business impact calculations.
-        """
-        print("Calculating quantified business impact across stakeholder groups...")
-        
-        try:
-            # Define market size constants
-            fantasy_market_size = 8_000_000_000  # USD 8B annual market
-            sports_betting_market = 7_500_000_000  # USD 7.5B annual market
-            
-            # Calculate average model accuracy with error handling
-            valid_accuracies = []
-            for target, models in test_results.items():
-                if models:
-                    try:
-                        # Filter to valid models with R-squared scores
-                        valid_models = {k: v for k, v in models.items() 
-                                        if isinstance(v, dict) and 'r2' in v and not np.isnan(v['r2'])}
-                        if valid_models:
-                            best_r2 = max(v['r2'] for v in valid_models.values())
-                            valid_accuracies.append(best_r2)
-                    except Exception as e:
-                        print(f"Error processing {target} for business impact: {e}")
-                        continue
-            
-            # Use calculated accuracy or default value
-            if not valid_accuracies:
-                print("Warning: No valid accuracies found, using default values.")
-                our_accuracy = 0.7
-            else:
-                our_accuracy = np.mean(valid_accuracies)
-            
-            # Calculate performance improvement over baseline
-            baseline_accuracy = 0.35 # Example baseline accuracy
-            accuracy_improvement_factor = (our_accuracy - baseline_accuracy) / baseline_accuracy if baseline_accuracy != 0 else 0
-            
-            # Calculate comprehensive business impact metrics
-            impact = {
-                'overall_metrics': {
-                    'our_accuracy_pct': our_accuracy * 100,
-                    'baseline_accuracy_pct': baseline_accuracy * 100,
-                    'accuracy_improvement_pct': accuracy_improvement_factor * 100,
-                    'reliability_score': our_accuracy ** 0.5 * 100
-                },
-                'fantasy_sports': {
-                    'market_size_millions': fantasy_market_size / 1_000_000,
-                    'addressable_market_millions': (fantasy_market_size * 0.02 * accuracy_improvement_factor) / 1_000_000,
-                    'weekly_lineup_advantage': accuracy_improvement_factor * 12.5,
-                    'season_win_improvement': accuracy_improvement_factor * 18.3,
-                    'roi_improvement_pct': accuracy_improvement_factor * 22.4
-                },
-                'sports_betting': {
-                    'break_even_improvement': 52.4 + (accuracy_improvement_factor * 8.2), # Adjusted for factor
-                    'roi_boost_pct': accuracy_improvement_factor * 15.7,
-                    'edge_basis_points': accuracy_improvement_factor * 320,
-                    'annual_value_millions': (sports_betting_market * 0.001 * accuracy_improvement_factor) / 1_000_000
-                },
-                'team_analytics': {
-                    'injury_prevention_value_millions': 2.1 * (1 + accuracy_improvement_factor * 0.1), # Example scaling
-                    'rotation_optimization_wins': 5.7 * (1 + accuracy_improvement_factor * 0.1), # Example scaling
-                    'contract_evaluation_accuracy': our_accuracy * 100,
-                    'competitive_advantage_pct': accuracy_improvement_factor * 8.9
-                },
-                'prediction_precision': {}
-            }
-            
-            # Calculate prediction precision for each target variable
-            for target, models in test_results.items():
-                try:
-                    # Find best performing model for this target
-                    best_r2 = 0
-                    best_model_name = None
-                    best_metrics = None
-                    
-                    for model_name, metrics in models.items():
-                        if isinstance(metrics, dict) and 'r2' in metrics:
-                            if not np.isnan(metrics['r2']) and metrics['r2'] > best_r2:
-                                best_r2 = metrics['r2']
-                                best_model_name = model_name
-                                best_metrics = metrics
-                    
-                    # Store precision metrics for best model
-                    if best_metrics is not None:
-                        impact['prediction_precision'][target] = {
-                            'typical_error': best_metrics['mae'],
-                            'accuracy_pct': best_metrics['r2'] * 100,
-                            'rmse': best_metrics.get('rmse', 0),
-                            'game_impact': f"±{best_metrics['mae']:.1f} {target} per game"
-                        }
-                    else:
-                        impact['prediction_precision'][target] = {
-                            'typical_error': 0,
-                            'accuracy_pct': 0,
-                            'rmse': 0,
-                            'game_impact': f"No valid model for {target}"
-                        }
-                except Exception as e:
-                    print(f"Error processing precision for {target}: {e}")
-                    impact['prediction_precision'][target] = {
-                        'typical_error': 0,
-                        'accuracy_pct': 0,
-                        'rmse': 0,
-                        'game_impact': f"Error calculating {target}"
-                    }
-                    
-            return impact
-            
-        except Exception as e:
-            print(f"Error calculating business impact: {e}")
-            # Return default impact structure if calculation fails
-            return {
-                'overall_metrics': {'our_accuracy_pct': 70, 'baseline_accuracy_pct': 35, 'accuracy_improvement_pct': 100, 'reliability_score': 80},
-                'fantasy_sports': {'roi_improvement_pct': 25, 'addressable_market_millions': 100, 'weekly_lineup_advantage': 12, 'season_win_improvement': 18, 'market_size_millions': 8000}, # Added market_size_millions here
-                'sports_betting': {'edge_basis_points': 200, 'break_even_improvement': 55, 'roi_boost_pct': 15, 'annual_value_millions': 7.5}, # Added annual_value_millions here
-                'team_analytics': {'injury_prevention_value_millions': 2.1, 'rotation_optimization_wins': 5.7, 'contract_evaluation_accuracy': 79.3, 'competitive_advantage_pct': 11.3},
-                'prediction_precision': {}
-            }
-
-    def create_precision_metrics_table(self, test_results: Dict) -> pd.DataFrame:
-        """
-        Generates a comprehensive precision metrics table with statistical confidence intervals.
-        
-        This method creates a detailed table showing model performance metrics including
-        confidence intervals, reliability scores, and sample sizes for statistical validation.
-        
-        Args:
-            test_results: Dictionary containing model performance results.
-            
-        Returns:
-            DataFrame containing formatted precision metrics.
-        """
-        print("Generating precision metrics with statistical confidence intervals...")
-        
-        precision_data = []
-        
-        for target, models in test_results.items():
-            try:
-                # Filter to models with complete metrics
-                valid_models = {k: v for k, v in models.items() 
-                                if isinstance(v, dict) and 'r2' in v and not np.isnan(v['r2'])}
-                
-                if not valid_models:
-                    continue
-                    
-                # Select best performing model
-                best_model = max(valid_models, key=lambda x: valid_models[x]['r2'])
-                metrics = valid_models[best_model]
-                
-                # Calculate confidence intervals and additional metrics
-                if 'predictions' in metrics and self.y_test and target in self.y_test and len(self.y_test[target]) > 0 and len(metrics['predictions']) > 0: # Updated checks
-                    predictions = metrics['predictions']
-                    actuals = self.y_test[target]
-                    
-                    # Ensure actuals and predictions are aligned
-                    if len(actuals) != len(predictions):
-                        print(f"Warning: Length mismatch between actuals ({len(actuals)}) and predictions ({len(predictions)}) for target {target}. Skipping detailed precision metrics.")
-                        ci_95 = metrics['mae'] * 1.5
-                        mape = metrics.get('mape', 0)
-                        within_1_std = 68.0
-                        sample_size = len(actuals) if len(actuals) > 0 else len(predictions) if len(predictions) > 0 else 0
-                    else:
-                        # Calculate statistical confidence metrics
-                        residuals = actuals - predictions
-                        std_error = np.std(residuals)
-                        ci_95 = 1.96 * std_error
-                        
-                        # Calculate mean absolute percentage error
-                        mape = np.mean(np.abs((actuals - predictions) / np.maximum(actuals, 1e-8))) * 100
-                        within_1_std = np.mean(np.abs(residuals) <= std_error) * 100
-                        
-                        sample_size = len(predictions)
-                else:
-                    # Use estimated confidence intervals if predictions not available or data empty
-                    ci_95 = metrics['mae'] * 1.5
-                    mape = metrics.get('mape', 0)
-                    within_1_std = 68.0
-                    sample_size = 0 # Indicate no actual sample size could be determined
-                
-                # Compile precision metrics for this target
-                precision_data.append({
-                    'Target': target.upper(),
-                    'Best Model': best_model.replace('_', ' ').title(),
-                    'Accuracy (R²)': f"{metrics['r2']:.3f}",
-                    'Typical Error (MAE)': f"±{metrics['mae']:.2f}",
-                    '95% Confidence Interval': f"±{ci_95:.2f}",
-                    'RMSE': f"{metrics.get('rmse', 0):.2f}",
-                    'MAPE (%)': f"{mape:.1f}%",
-                    'Reliability Score': f"{(metrics['r2']**0.5)*100:.1f}%",
-                    'Sample Size': f"{sample_size:,}",
-                    'Within 1σ (%)': f"{within_1_std:.1f}%"
-                })
-                
-            except Exception as e:
-                print(f"Error processing precision metrics for {target}: {e}")
-                continue
-        
-        # Create DataFrame and save to file
-        precision_df = pd.DataFrame(precision_data)
-        filename = self.reports_dir / f"precision_metrics_table.csv"
-        precision_df.to_csv(filename, index=False)
-        print(f"Precision metrics table saved to: {filename}")
-        
-        return precision_df
-
-    def generate_executive_slide_content(self, test_results: Dict, impact_metrics: Dict) -> str:
-        """
-        Generates comprehensive executive summary content for presentation slides.
-        
-        This method creates formatted text content suitable for executive presentations,
-        including performance metrics, business impact quantification, competitive
-        advantages, and implementation readiness assessment.
-        
-        Args:
-            test_results: Dictionary containing model performance metrics.
-            impact_metrics: Dictionary containing business impact calculations.
-            
-        Returns:
-            Formatted string containing executive summary content.
-        """
-        print("Generating executive summary content for presentation...")
-        
-        try:
-            # Extract target-specific performance metrics
-            target_metrics = {}
-            for target in ['pts', 'reb', 'ast']:
-                if target in test_results and test_results[target]:
-                    valid_models = {k: v for k, v in test_results[target].items() 
-                                    if isinstance(v, dict) and 'r2' in v and not np.isnan(v['r2'])}
-                    if valid_models:
-                        best_model = max(valid_models, key=lambda x: valid_models[x]['r2'])
-                        target_metrics[target] = valid_models[best_model]
-            
-            # Calculate average accuracy across all targets
-            if target_metrics:
-                avg_accuracy = np.mean([metrics['r2'] for metrics in target_metrics.values()])
-            else:
-                avg_accuracy = 0.7
-            
-            # Build comprehensive executive summary
-            slide_content = f"""
-NBA PLAYER PERFORMANCE PREDICTION: EXECUTIVE SUMMARY
-
-PREDICTION ACCURACY ACHIEVED:"""
-            
-            # Add performance metrics for each target
-            for target, display_name in [('pts', 'Points'), ('reb', 'Rebounds'), ('ast', 'Assists')]:
-                if target in target_metrics:
-                    r2 = target_metrics[target]['r2']
-                    mae = target_metrics[target]['mae']
-                    slide_content += f"\n{display_name}: {r2*100:.1f}% accuracy (±{mae:.1f} {target} per game)"
-                else:
-                    slide_content += f"\n{display_name}: Model not available"
-            
-            # Add quantified business impact section
-            slide_content += f"""
-
-QUANTIFIED BUSINESS IMPACT:
-USD {impact_metrics.get('fantasy_sports', {}).get('addressable_market_millions', 0):.1f}M addressable fantasy market opportunity
-{impact_metrics.get('overall_metrics', {}).get('accuracy_improvement_pct', 0):.0f}% improvement over traditional prediction methods
-+{impact_metrics.get('fantasy_sports', {}).get('season_win_improvement', 0):.1f} additional wins per season for fantasy managers
-{impact_metrics.get('sports_betting', {}).get('break_even_improvement', 0):.1f}% break-even rate for sports bettors (+{impact_metrics.get('sports_betting', {}).get('roi_boost_pct', 0):.1f}% ROI)
-
-COMPETITIVE ADVANTAGES:
-{avg_accuracy*100:.1f}% average prediction reliability across all statistics
-169,161 game records analyzed with chronological validation preventing data leakage
-Production-ready deployment with real-time prediction API capability
-Statistical significance: p < 0.001 across all model performance metrics
-
-STAKEHOLDER VALUE:
-Fantasy Sports: +{impact_metrics.get('fantasy_sports', {}).get('roi_improvement_pct', 0):.1f}% ROI improvement
-Sports Betting: {impact_metrics.get('sports_betting', {}).get('edge_basis_points', 0):.0f} basis points predictive edge
-NBA Teams: USD {impact_metrics.get('team_analytics', {}).get('injury_prevention_value_millions', 0):.1f}M potential savings per star player through load management
-Media: {impact_metrics.get('overall_metrics', {}).get('reliability_score', 0):.1f}% narrative reliability for data-driven storytelling
-
-IMPLEMENTATION READY:
-Models validated on 20% holdout test set with time-series cross-validation
-Feature engineering prevents 34+ potential data leakage sources
-Scalable architecture supporting real-time predictions for 450+ active players
-"""
-            
-            # Save executive summary to file
-            filename = self.reports_dir / f"executive_summary.txt"
-            with open(filename, 'w') as f:
-                f.write(slide_content)
-            print(f"Executive summary saved to: {filename}")
-            
-            return slide_content
-            
-        except Exception as e:
-            print(f"Error generating executive summary: {e}")
-            return "Executive summary generation failed due to data processing error."
-
-
-def create_presentation_visuals(pipeline, test_results: Dict, 
-                                 y_test: Dict, importance_results: Dict) -> None:
+def generate_presentation_visuals(pipeline, test_results: Dict, y_test: Dict, 
+                                importance_results: Dict) -> None:
     """
-    Orchestrates the creation of all presentation-ready visualizations.
+    Main orchestration function to generate all presentation materials.
     
-    This function initializes the visualizer and calls methods to generate various
-    visualization components, ensuring consistent styling and optimized layouts.
+    This function coordinates the generation of all visualizations and reports
+    needed for presenting NBA player performance prediction results. It ensures
+    all outputs are created in a consistent, professional format.
     
     Args:
-        pipeline: Trained model pipeline object.
-        test_results: Dictionary containing model performance results.
-        y_test: Dictionary containing actual test values.
-        importance_results: Dictionary containing feature importance analysis.
+        pipeline: The trained model pipeline object
+        test_results: Dictionary containing test set performance metrics
+        y_test: Dictionary of actual test set values by target
+        importance_results: Dictionary of feature importance scores
     """
-    print("Initiating creation of presentation-ready visualizations...")
-    print("-" * 80)
+    print("\n" + "="*60)
+    print("GENERATING PRESENTATION VISUALS AND REPORTS")
+    print("="*60 + "\n")
     
-    # Initialize professional visualizer
-    visualizer = AdvancedVisualizer(pipeline, None)
-    visualizer.set_test_data(y_test)
+    # Initialize the reporting class
+    reporter = ModelResultsReporter()
+    
+    # Generate all visualization types in sequence
+    reporter.create_model_performance_comparison(test_results)
+    reporter.create_feature_importance_plots(importance_results, test_results)
+    reporter.create_residual_analysis(test_results, y_test)
+    reporter.create_prediction_scatter_plots(test_results, y_test)
+    reporter.create_model_comparison_heatmap(test_results)
+    
+    # Generate comprehensive text summary report
+    reporter.generate_summary_report(test_results, importance_results)
+    
+    # Print completion summary
+    print("\n" + "="*60)
+    print("ALL VISUALS AND REPORTS GENERATED SUCCESSFULLY")
+    print("Visuals saved to: ../outputs/visuals/reporting_results/")
+    print("Reports saved to: ../outputs/reports/")
+    print("="*60 + "\n")
 
-    # Calculate comprehensive business impact metrics
-    impact_metrics = visualizer.calculate_business_impact(test_results)
-    
-    # Generate comprehensive visualization suite
-    print("\nGenerating executive dashboard...")
-    visualizer.create_hero_dashboard(test_results, impact_metrics)
-    
-    print("Creating stakeholder value propositions...")
-    visualizer.create_stakeholder_dashboard(impact_metrics)
-    
-    print("Building feature importance analyses...")
-    visualizer.create_feature_importance_plots(importance_results, test_results)
-    
-    print("Generating prediction accuracy analysis...")
-    visualizer.create_prediction_analysis(test_results, y_test)
 
-    print("Generating executive slide content...")
-    visualizer.generate_executive_slide_content(test_results, impact_metrics)
-    
-    print("\nVisualization generation complete.")
-    print("=" * 70)
-    print("All visuals saved with optimized layouts and enhanced readability.")
-    print(f"Visuals saved to: {visualizer.viz_dir}")
-
+# Module usage example and documentation
+if __name__ == "__main__":
+    # Display usage instructions when module is run directly
+    print("NBA Model Results Reporter")
+    print("Usage: from reporting import generate_presentation_visuals")
+    print("Call with: generate_presentation_visuals(pipeline, test_results, y_test, importance_results)")
+    print("\nThis module generates:")
+    print("  - Model performance comparison charts")
+    print("  - Feature importance visualizations")
+    print("  - Residual analysis plots")
+    print("  - Prediction accuracy scatter plots")
+    print("  - Model comparison heatmap")
+    print("  - Comprehensive summary report")

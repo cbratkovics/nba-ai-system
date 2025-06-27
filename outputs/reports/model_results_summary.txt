@@ -1,0 +1,116 @@
+NBA PLAYER PERFORMANCE PREDICTION - MODEL RESULTS SUMMARY
+============================================================
+Generated: 2025-06-26 20:44:47
+
+MODEL PERFORMANCE SUMMARY
+------------------------------
+
+PTS:
+  Linear Regression:
+    R² = -0.054
+    MAE = 5.28
+    RMSE = 8.894209820913852
+  Ridge:
+    R² = 0.879
+    MAE = 2.10
+    RMSE = 3.0151659870850205
+  Elastic Net:
+    R² = 0.875
+    MAE = 2.08
+    RMSE = 3.057782503824539
+  Random Forest:
+    R² = 0.946
+    MAE = 1.15
+    RMSE = 2.015112638310712
+  Gradient Boosting:
+    R² = -0.054
+    MAE = 5.19
+    RMSE = 8.894044586496175
+  BEST MODEL: Random Forest (R² = 0.946)
+
+REB:
+  Linear Regression:
+    R² = 0.232
+    MAE = 1.71
+    RMSE = 2.9760586784448932
+  Ridge:
+    R² = 0.682
+    MAE = 1.33
+    RMSE = 1.9148482928085588
+  Elastic Net:
+    R² = 0.677
+    MAE = 1.34
+    RMSE = 1.928659750060542
+  Random Forest:
+    R² = 0.719
+    MAE = 1.05
+    RMSE = 1.799287750230405
+  Gradient Boosting:
+    R² = 0.205
+    MAE = 1.64
+    RMSE = 3.0277914644846695
+  BEST MODEL: Random Forest (R² = 0.719)
+
+AST:
+  Linear Regression:
+    R² = 0.704
+    MAE = 0.87
+    RMSE = 1.291460325238386
+  Ridge:
+    R² = 0.704
+    MAE = 0.87
+    RMSE = 1.291454525473026
+  Elastic Net:
+    R² = 0.701
+    MAE = 0.86
+    RMSE = 1.2966730324189908
+  Random Forest:
+    R² = 0.708
+    MAE = 0.75
+    RMSE = 1.282622236297481
+  Gradient Boosting:
+    R² = 0.714
+    MAE = 0.75
+    RMSE = 1.2687437240224335
+  BEST MODEL: Gradient Boosting (R² = 0.714)
+
+
+TOP PREDICTIVE FEATURES
+------------------------------
+
+PTS - Top 5 Features:
+  ast_outlier_flag: 6.599
+  minutes_played: 2.271
+  elite_scorer: 0.466
+  elite_usage: 0.430
+  turnover: 0.229
+
+REB - Top 5 Features:
+  ast_outlier_flag: 6.599
+  minutes_played: 2.271
+  elite_scorer: 0.466
+  elite_usage: 0.430
+  turnover: 0.229
+
+AST - Top 5 Features:
+  ast_outlier_flag: 6.599
+  minutes_played: 2.271
+  elite_scorer: 0.466
+  elite_usage: 0.430
+  turnover: 0.229
+
+
+KEY INSIGHTS
+------------------------------
+1. Playing time (minutes) is consistently the top predictor
+2. Load management features (rest × minutes) show high importance
+3. Random Forest models perform best for points and rebounds
+4. Model accuracy: Points > Rebounds ≈ Assists
+
+
+AREAS FOR IMPROVEMENT
+------------------------------
+1. Consider opponent defensive metrics
+2. Add player momentum/streak features
+3. Incorporate team performance context
+4. Address heteroscedasticity in residuals

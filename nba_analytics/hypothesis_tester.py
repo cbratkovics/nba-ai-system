@@ -1,3 +1,10 @@
+"""
+NBA Hypothesis Testing Module
+
+Author: Christopher Bratkovics
+Created: 2025
+"""
+
 import pandas as pd
 import numpy as np
 from scipy import stats
@@ -10,12 +17,15 @@ warnings.filterwarnings('ignore')
 
 class NBAHypothesisTester:
     """
-    A comprehensive class for conducting hypothesis tests on NBA player performance data.
+    Conducts statistical hypothesis tests on NBA player performance data.
     
-    This class implements the three hypothesis tests outlined in the capstone proposal:
-    1. Impact of Rest Days on Shooting Efficiency
-    2. Home vs. Away Performance Differentials  
-    3. Evolution of 3-Point Attempt Rates Over Time
+    Implements three key hypothesis tests:
+    1. Impact of rest days on shooting efficiency
+    2. Home court advantage for individual scoring
+    3. Evolution of three-point shooting trends over time
+    
+    Uses both parametric and non-parametric testing methods to ensure
+    robust statistical conclusions.
     """
     
     def __init__(self, player_stats_df: pd.DataFrame, games_df: pd.DataFrame = None):
@@ -23,65 +33,77 @@ class NBAHypothesisTester:
         Initialize the hypothesis tester with NBA data.
         
         Args:
-            player_stats_df: DataFrame with player game statistics
-            games_df: Optional DataFrame with game details (for additional context)
+            player_stats_df: DataFrame containing player game statistics
+            games_df: Optional DataFrame containing game-level details
         """
         self.player_stats = player_stats_df.copy()
         self.games_df = games_df.copy() if games_df is not None else None
         self.results = {}
         
-        # Prepare the data for analysis
+        # Prepare data for statistical analysis
         self._prepare_data()
     
     def _prepare_data(self):
-        """Prepare and clean data for hypothesis testing."""
+        """
+        Prepare and validate data for hypothesis testing.
+        
+        Handles both raw and feature-engineered data by detecting available columns
+        and creating necessary features if they don't exist.
+        """
         print("Preparing data for hypothesis testing...")
         
-        # Convert date column to datetime if it exists
+        # Convert date column to datetime format for time-based calculations
         if 'game_date' in self.player_stats.columns:
             self.player_stats['game_date'] = pd.to_datetime(self.player_stats['game_date'])
         
-        # Sort by player and date for rest day calculations
+        # Sort data chronologically by player for accurate rest day calculations
         self.player_stats = self.player_stats.sort_values(['player_id', 'game_date'])
         
-        # Check if data has already been feature engineered
+        # Detect if data has already undergone feature engineering
         feature_engineered = self._check_feature_engineering_status()
         
         if feature_engineered:
             print("Data appears to be feature engineered already")
-            # Map feature engineered columns to expected names
+            # Map feature engineered column names to standard names
             self._map_feature_engineered_columns()
         else:
-            print("Data not feature engineered - creating basic required columns")
-            # Calculate per-36 minute stats (creates minutes_numeric column)
+            print("Data not feature engineered - creating required features")
+            # Calculate per-36 minute statistics for fair comparison
             self.player_stats = self._calculate_per_36_stats()
             
-            # Calculate rest days between games for each player
+            # Calculate rest days between consecutive games
             self.player_stats['rest_days'] = self._calculate_rest_days()
             
-            # Determine home/away status for each player
+            # Determine home/away game status
             self.player_stats['is_home_game'] = self._determine_home_away_status()
         
         print(f"Data preparation complete. Dataset shape: {self.player_stats.shape}")
         
-        # Debug: Print available columns
-        print(f"Key columns available: {[col for col in self.player_stats.columns if any(x in col for x in ['rest', 'home', 'minutes', 'fg3a_per_36'])]}")
+        # Display available relevant columns for debugging
+        relevant_cols = [col for col in self.player_stats.columns 
+                        if any(x in col for x in ['rest', 'home', 'minutes', 'fg3a_per_36'])]
+        print(f"Key columns available: {relevant_cols}")
         
-        # Check if required columns exist
+        # Verify all required columns exist for hypothesis tests
         self._verify_required_columns()
     
     def _check_feature_engineering_status(self) -> bool:
-        """Check if the data has already been feature engineered."""
+        """
+        Check if the data has already been feature engineered.
+        
+        Returns:
+            True if at least 3 feature engineering indicators are present
+        """
         feature_eng_indicators = [
             'minutes_played', 'rest_days', 'sufficient_rest', 
             'is_home_game', 'fg3a_per_36min'
         ]
         
         present_indicators = sum(1 for col in feature_eng_indicators if col in self.player_stats.columns)
-        return present_indicators >= 3  # If at least 3 feature engineered columns exist
+        return present_indicators >= 3
     
     def _map_feature_engineered_columns(self):
-        """Map feature engineered column names to expected names for hypothesis testing."""
+        """Map feature engineered column names to standardized names for consistency."""
         column_mapping = {
             'minutes_played': 'minutes_numeric',
             'fg3a_per_36min': 'fg3a_per_36'
@@ -90,10 +112,10 @@ class NBAHypothesisTester:
         for feature_col, expected_col in column_mapping.items():
             if feature_col in self.player_stats.columns and expected_col not in self.player_stats.columns:
                 self.player_stats[expected_col] = self.player_stats[feature_col]
-                print(f"Mapped {feature_col} -> {expected_col}")
+                print(f"Mapped {feature_col} to {expected_col}")
     
     def _verify_required_columns(self):
-        """Verify that all required columns for hypothesis testing exist."""
+        """Verify that all required columns exist for each hypothesis test."""
         required_for_tests = {
             'hypothesis_1': ['rest_days', 'fg_pct', 'fga'],
             'hypothesis_2': ['is_home_game', 'pts'],
@@ -103,24 +125,34 @@ class NBAHypothesisTester:
         for test_name, required_cols in required_for_tests.items():
             missing_cols = [col for col in required_cols if col not in self.player_stats.columns]
             if missing_cols:
-                print(f":( {test_name}: Missing columns {missing_cols}")
+                print(f"WARNING - {test_name}: Missing columns {missing_cols}")
             else:
-                print(f":D {test_name}: All required columns present")
+                print(f"READY - {test_name}: All required columns present")
     
     def _convert_minutes_to_float(self, minutes_str) -> float:
-        """Convert minutes from string format (e.g., '30:00') to float."""
+        """
+        Convert minutes from various formats to decimal.
+        
+        Handles string formats like '30:00' and numeric inputs.
+        
+        Args:
+            minutes_str: Minutes in string or numeric format
+            
+        Returns:
+            Minutes as float (e.g., 30.5 for 30:30)
+        """
         if pd.isna(minutes_str) or minutes_str == '' or minutes_str is None:
             return 0.0
         
         try:
-            # If it's already a number, convert to float
+            # Handle numeric inputs directly
             if isinstance(minutes_str, (int, float)):
                 return float(minutes_str)
             
-            # Convert to string to handle any type
+            # Convert to string for consistent processing
             minutes_str = str(minutes_str)
             
-            # Handle MM:SS format
+            # Parse MM:SS format
             if ':' in minutes_str:
                 parts = minutes_str.split(':')
                 if len(parts) == 2:
@@ -128,29 +160,39 @@ class NBAHypothesisTester:
                     seconds = float(parts[1])
                     return minutes + (seconds / 60)
                 else:
-                    return float(parts[0])  # Just take the first part if weird format
+                    return float(parts[0])  # Handle malformed time strings
             else:
-                # Direct conversion if no colon
+                # Direct numeric conversion
                 return float(minutes_str)
         except (ValueError, TypeError, AttributeError):
-            # If conversion fails, return 0
+            # Return 0 if conversion fails
             print(f"Warning: Could not convert minutes value: {minutes_str}")
             return 0.0
     
     def _calculate_rest_days(self) -> pd.Series:
-        """Calculate rest days between games for each player."""
+        """
+        Calculate rest days between games for each player.
+        
+        Rest days = calendar days between games - 1
+        First game for each player has NaN rest days.
+        
+        Returns:
+            Series with rest days for each game
+        """
         rest_days = []
         
         for player_id in self.player_stats['player_id'].unique():
             player_games = self.player_stats[self.player_stats['player_id'] == player_id].copy()
             player_games = player_games.sort_values('game_date')
             
-            player_rest_days = [np.nan]  # First game has no previous game
+            # First game has no previous game for comparison
+            player_rest_days = [np.nan]
             
             for i in range(1, len(player_games)):
                 current_date = player_games.iloc[i]['game_date']
                 previous_date = player_games.iloc[i-1]['game_date']
-                days_diff = (current_date - previous_date).days - 1  # Subtract 1 to get rest days
+                # Rest days = days between games minus 1
+                days_diff = (current_date - previous_date).days - 1
                 player_rest_days.append(max(0, days_diff))  # Ensure non-negative
             
             rest_days.extend(player_rest_days)
@@ -158,8 +200,14 @@ class NBAHypothesisTester:
         return pd.Series(rest_days, index=self.player_stats.index)
     
     def _determine_home_away_status(self) -> pd.Series:
-        """Determine if each player stat record is from a home or away game."""
-        # A player is playing at home if their team_id matches the game's home_team_id
+        """
+        Determine if each game was played at home or away.
+        
+        A player is at home when their team_id matches the game's home_team_id.
+        
+        Returns:
+            Boolean Series indicating home game status
+        """
         if 'game_home_team_id' in self.player_stats.columns and 'team_id' in self.player_stats.columns:
             return self.player_stats['team_id'] == self.player_stats['game_home_team_id']
         else:
@@ -167,10 +215,17 @@ class NBAHypothesisTester:
             return pd.Series([np.nan] * len(self.player_stats), index=self.player_stats.index)
     
     def _calculate_per_36_stats(self) -> pd.DataFrame:
-        """Calculate per-36 minute statistics."""
+        """
+        Calculate per-36 minute statistics for fair comparison across different playing times.
+        
+        Per-36 stats are the NBA standard for comparing players with different minutes.
+        
+        Returns:
+            DataFrame with per-36 statistics added
+        """
         df = self.player_stats.copy()
         
-        # Convert minutes to numeric, handling string formats like "30:00"
+        # Convert minutes to numeric format
         if 'min' in df.columns:
             print("Converting minutes to numeric format...")
             df['minutes_numeric'] = df['min'].apply(self._convert_minutes_to_float)
@@ -185,7 +240,7 @@ class NBAHypothesisTester:
                         (df[stat] / df['minutes_numeric']) * 36,
                         np.nan
                     )
-                    print(f"✓ Created {stat}_per_36 column")
+                    print(f"Created {stat}_per_36 column")
                 else:
                     print(f"Warning: {stat} column not found in data")
             
@@ -193,40 +248,40 @@ class NBAHypothesisTester:
             print(df['minutes_numeric'].describe())
         else:
             print("Warning: 'min' column not found. Cannot calculate per-36 stats.")
-            # Create a default minutes_numeric column to prevent errors
+            # Create default column to prevent errors
             df['minutes_numeric'] = 0.0
         
         return df
     
     def hypothesis_1_rest_days_shooting(self, min_fga: int = 5, alpha: float = 0.05) -> Dict:
         """
-        Hypothesis 1: Impact of Rest Days on Shooting Efficiency
+        Test Hypothesis 1: Impact of Rest Days on Shooting Efficiency
         
-        H0: No significant difference in FG% between players with 2+ rest days vs <2 rest days
+        H0: No significant difference in FG% between well-rested and not well-rested players
         H1: Significant difference exists
         
         Args:
-            min_fga: Minimum field goal attempts to include a game
-            alpha: Significance level
+            min_fga: Minimum field goal attempts to include a game (default: 5)
+            alpha: Significance level for hypothesis testing (default: 0.05)
             
         Returns:
-            Dictionary with test results
+            Dictionary containing test results and statistics
         """
         print("\n" + "="*60)
         print("HYPOTHESIS 1: IMPACT OF REST DAYS ON SHOOTING EFFICIENCY")
         print("="*60)
         
-        # Check for feature engineered columns first
+        # Check for rest day columns (feature engineered or raw)
         rest_col = 'rest_days'
         sufficient_rest_col = 'sufficient_rest'
         
         if sufficient_rest_col in self.player_stats.columns:
             print(f"Using feature engineered column: {sufficient_rest_col}")
-            # Use the feature engineered binary column
+            # Use binary sufficient rest indicator
             valid_data = self.player_stats[
-                (self.player_stats['fga'] >= min_fga) &  # Minimum attempts
-                (self.player_stats[sufficient_rest_col].notna()) &  # Valid rest indicator
-                (self.player_stats['fg_pct'].notna())  # Valid FG%
+                (self.player_stats['fga'] >= min_fga) &
+                (self.player_stats[sufficient_rest_col].notna()) &
+                (self.player_stats['fg_pct'].notna())
             ].copy()
             
             well_rested = valid_data[valid_data[sufficient_rest_col] == True]['fg_pct']
@@ -234,19 +289,20 @@ class NBAHypothesisTester:
             
         elif rest_col in self.player_stats.columns:
             print(f"Using rest days column: {rest_col}")
-            # Filter data
+            # Filter for valid shooting data
             valid_data = self.player_stats[
-                (self.player_stats['fga'] >= min_fga) &  # Minimum attempts
-                (self.player_stats[rest_col].notna()) &  # Valid rest days
-                (self.player_stats['fg_pct'].notna())  # Valid FG%
+                (self.player_stats['fga'] >= min_fga) &
+                (self.player_stats[rest_col].notna()) &
+                (self.player_stats['fg_pct'].notna())
             ].copy()
             
-            # Create rest day groups
+            # Split into rest groups (2+ days considered sufficient rest)
             well_rested = valid_data[valid_data[rest_col] >= 2]['fg_pct']
             not_well_rested = valid_data[valid_data[rest_col] < 2]['fg_pct']
         else:
             print("Error: No rest days columns found!")
-            print(f"Available columns with 'rest': {[col for col in self.player_stats.columns if 'rest' in col.lower()]}")
+            available_rest_cols = [col for col in self.player_stats.columns if 'rest' in col.lower()]
+            print(f"Available columns with 'rest': {available_rest_cols}")
             return {'error': 'Missing rest days data'}
         
         print(f"Sample sizes:")
@@ -258,15 +314,15 @@ class NBAHypothesisTester:
             print("Error: One or both groups have no data")
             return {'error': 'Insufficient data for rest day comparison'}
         
-        # Descriptive statistics
+        # Calculate descriptive statistics
         print(f"\nDescriptive Statistics:")
         print(f"  Well-rested FG%: Mean={well_rested.mean():.3f}, Std={well_rested.std():.3f}")
         print(f"  Not well-rested FG%: Mean={not_well_rested.mean():.3f}, Std={not_well_rested.std():.3f}")
         
-        # Check assumptions
+        # Test assumptions for parametric testing
         print(f"\nAssumption Checks:")
         
-        # Normality tests (Shapiro-Wilk for smaller samples, Anderson-Darling for larger)
+        # Normality tests (use appropriate test based on sample size)
         if len(well_rested) < 5000:
             _, p_norm1 = stats.shapiro(well_rested.sample(min(len(well_rested), 5000)))
             _, p_norm2 = stats.shapiro(not_well_rested.sample(min(len(not_well_rested), 5000)))
@@ -276,21 +332,21 @@ class NBAHypothesisTester:
         
         print(f"  Normality p-values: Well-rested={p_norm1:.6f}, Not well-rested={p_norm2:.6f}")
         
-        # Equal variance test
+        # Test for equal variances
         _, p_var = stats.levene(well_rested, not_well_rested)
         print(f"  Equal variance test p-value: {p_var:.6f}")
         
-        # Perform tests
+        # Perform statistical tests
         results = {}
         
-        # Independent t-test
+        # Independent t-test (parametric)
         equal_var = p_var > alpha
         t_stat, t_p = stats.ttest_ind(well_rested, not_well_rested, equal_var=equal_var)
         
         # Mann-Whitney U test (non-parametric alternative)
         u_stat, u_p = stats.mannwhitneyu(well_rested, not_well_rested, alternative='two-sided')
         
-        # Effect size (Cohen's d)
+        # Calculate effect size (Cohen's d)
         pooled_std = np.sqrt(((len(well_rested) - 1) * well_rested.var() + 
                              (len(not_well_rested) - 1) * not_well_rested.var()) / 
                             (len(well_rested) + len(not_well_rested) - 2))
@@ -301,7 +357,7 @@ class NBAHypothesisTester:
         print(f"  Mann-Whitney U: U={u_stat:.0f}, p={u_p:.6f}")
         print(f"  Cohen's d (effect size): {cohens_d:.4f}")
         
-        # Interpretation
+        # Interpret results
         significant = t_p < alpha
         print(f"\nConclusion (α = {alpha}):")
         if significant:
@@ -311,7 +367,7 @@ class NBAHypothesisTester:
         else:
             print(f"  FAIL TO REJECT H0: No significant difference (p = {t_p:.6f})")
         
-        # Store results
+        # Store comprehensive results
         results = {
             'hypothesis': 'Rest Days Impact on Shooting Efficiency',
             'sample_sizes': {'well_rested': len(well_rested), 'not_well_rested': len(not_well_rested)},
@@ -337,22 +393,22 @@ class NBAHypothesisTester:
     
     def hypothesis_2_home_away_scoring(self, alpha: float = 0.05) -> Dict:
         """
-        Hypothesis 2: Home vs. Away Performance Differentials
+        Test Hypothesis 2: Home vs. Away Performance Differentials
         
-        H0: Mean points scored at home = Mean points scored away
-        H1: Mean points scored at home ≠ Mean points scored away
+        H0: Mean points scored at home equals mean points scored away
+        H1: Mean points scored at home differs from mean points scored away
         
         Args:
-            alpha: Significance level
+            alpha: Significance level for hypothesis testing (default: 0.05)
             
         Returns:
-            Dictionary with test results
+            Dictionary containing test results and statistics
         """
         print("\n" + "="*60)
         print("HYPOTHESIS 2: HOME VS. AWAY PERFORMANCE DIFFERENTIALS")
         print("="*60)
         
-        # Filter data
+        # Filter for valid scoring data with home/away status
         valid_data = self.player_stats[
             (self.player_stats['pts'].notna()) &
             (self.player_stats['is_home_game'].notna())
@@ -365,12 +421,12 @@ class NBAHypothesisTester:
         print(f"  Home games: {len(home_points)} player-games")
         print(f"  Away games: {len(away_points)} player-games")
         
-        # Descriptive statistics
+        # Calculate descriptive statistics
         print(f"\nDescriptive Statistics:")
         print(f"  Home points: Mean={home_points.mean():.2f}, Std={home_points.std():.2f}")
         print(f"  Away points: Mean={away_points.mean():.2f}, Std={away_points.std():.2f}")
         
-        # Check assumptions
+        # Test assumptions
         print(f"\nAssumption Checks:")
         
         # Normality tests
@@ -387,14 +443,14 @@ class NBAHypothesisTester:
         _, p_var = stats.levene(home_points, away_points)
         print(f"  Equal variance test p-value: {p_var:.6f}")
         
-        # Perform tests
+        # Perform statistical tests
         equal_var = p_var > alpha
         t_stat, t_p = stats.ttest_ind(home_points, away_points, equal_var=equal_var)
         
-        # Mann-Whitney U test
+        # Mann-Whitney U test (non-parametric)
         u_stat, u_p = stats.mannwhitneyu(home_points, away_points, alternative='two-sided')
         
-        # Effect size
+        # Calculate effect size
         pooled_std = np.sqrt(((len(home_points) - 1) * home_points.var() + 
                              (len(away_points) - 1) * away_points.var()) / 
                             (len(home_points) + len(away_points) - 2))
@@ -405,7 +461,7 @@ class NBAHypothesisTester:
         print(f"  Mann-Whitney U: U={u_stat:.0f}, p={u_p:.6f}")
         print(f"  Cohen's d (effect size): {cohens_d:.4f}")
         
-        # Interpretation
+        # Interpret results
         significant = t_p < alpha
         print(f"\nConclusion (α = {alpha}):")
         if significant:
@@ -441,27 +497,27 @@ class NBAHypothesisTester:
     
     def hypothesis_3_three_point_evolution(self, min_minutes: int = 20, alpha: float = 0.05) -> Dict:
         """
-        Hypothesis 3: Evolution of 3-Point Attempt Rates
+        Test Hypothesis 3: Evolution of 3-Point Attempt Rates
         
-        H0: Mean 3PA per 36 minutes in 2023-24 = Mean 3PA per 36 minutes in 2021-22
-        H1: Mean 3PA per 36 minutes in 2023-24 > Mean 3PA per 36 minutes in 2021-22
+        H0: Mean 3PA per 36 minutes in 2023-24 equals mean in 2021-22
+        H1: Mean 3PA per 36 minutes in 2023-24 is greater than in 2021-22
         
         Args:
-            min_minutes: Minimum minutes played to include a game
-            alpha: Significance level
+            min_minutes: Minimum minutes played to include a game (default: 20)
+            alpha: Significance level for hypothesis testing (default: 0.05)
             
         Returns:
-            Dictionary with test results
+            Dictionary containing test results and statistics
         """
         print("\n" + "="*60)
         print("HYPOTHESIS 3: EVOLUTION OF 3-POINT ATTEMPT RATES")
         print("="*60)
         
-        # Check for feature engineered columns
+        # Look for 3PA per 36 column (may have different names)
         fg3a_per_36_col = None
         minutes_col = None
         
-        # Look for the 3PA per 36 column
+        # Check for 3PA per 36 column variants
         possible_fg3a_cols = ['fg3a_per_36min', 'fg3a_per_36', 'fg3a_per_36_minutes']
         for col in possible_fg3a_cols:
             if col in self.player_stats.columns:
@@ -469,7 +525,7 @@ class NBAHypothesisTester:
                 print(f"Using 3PA per 36 column: {fg3a_per_36_col}")
                 break
         
-        # Look for the minutes column
+        # Check for minutes column variants
         possible_minutes_cols = ['minutes_played', 'minutes_numeric', 'min']
         for col in possible_minutes_cols:
             if col in self.player_stats.columns:
@@ -477,7 +533,7 @@ class NBAHypothesisTester:
                 print(f"Using minutes column: {minutes_col}")
                 break
         
-        # If we don't have the per-36 column, try to create it
+        # Create per-36 stats if not present
         if fg3a_per_36_col is None:
             if 'fg3a' in self.player_stats.columns and minutes_col is not None:
                 print("Creating fg3a_per_36 column from fg3a and minutes...")
@@ -494,13 +550,13 @@ class NBAHypothesisTester:
                     np.nan
                 )
                 fg3a_per_36_col = 'fg3a_per_36'
-                print(f"✓ Created {fg3a_per_36_col} column")
+                print(f"Created {fg3a_per_36_col} column")
             else:
                 print("Error: Cannot create fg3a_per_36 - missing required columns")
                 print(f"Available columns: fg3a={'fg3a' in self.player_stats.columns}, minutes={minutes_col}")
                 return {'error': 'Missing 3PA or minutes data'}
         
-        # Check required columns exist
+        # Verify required columns exist
         required_cols = ['game_season', fg3a_per_36_col]
         missing_cols = [col for col in required_cols if col not in self.player_stats.columns]
         
@@ -509,7 +565,7 @@ class NBAHypothesisTester:
             print("Available columns:", list(self.player_stats.columns))
             return {'error': 'Missing required columns'}
         
-        # Filter data for the two seasons and minimum minutes
+        # Filter data for comparison seasons with minimum minutes
         print(f"Filtering data for seasons 2022 and 2024 with min {min_minutes} minutes...")
         
         # Convert minutes for filtering if needed
@@ -520,7 +576,7 @@ class NBAHypothesisTester:
                 minutes_for_filter = self.player_stats[minutes_col]
         else:
             print("Warning: No minutes column found for filtering - proceeding without minutes filter")
-            minutes_for_filter = pd.Series([min_minutes] * len(self.player_stats))  # Dummy series to pass filter
+            minutes_for_filter = pd.Series([min_minutes] * len(self.player_stats))
         
         valid_data = self.player_stats[
             (self.player_stats['game_season'].isin([2022, 2024])) &  # 2021-22 and 2023-24 seasons
@@ -547,12 +603,12 @@ class NBAHypothesisTester:
             print("Error: One or both seasons have no data")
             return {'error': 'Insufficient data for one or both seasons'}
         
-        # Descriptive statistics
+        # Calculate descriptive statistics
         print(f"\nDescriptive Statistics:")
         print(f"  2021-22 3PA/36: Mean={season_2022.mean():.2f}, Std={season_2022.std():.2f}")
         print(f"  2023-24 3PA/36: Mean={season_2024.mean():.2f}, Std={season_2024.std():.2f}")
         
-        # Check assumptions
+        # Test assumptions
         print(f"\nAssumption Checks:")
         
         # Normality tests
@@ -569,17 +625,17 @@ class NBAHypothesisTester:
         _, p_var = stats.levene(season_2022, season_2024)
         print(f"  Equal variance test p-value: {p_var:.6f}")
         
-        # Perform tests
-        # One-tailed t-test (testing if 2024 > 2022)
+        # Perform one-tailed tests (testing if 2024 > 2022)
         equal_var = p_var > alpha
         t_stat, t_p_two_tailed = stats.ttest_ind(season_2024, season_2022, equal_var=equal_var)
+        # Convert to one-tailed p-value
         t_p_one_tailed = t_p_two_tailed / 2 if t_stat > 0 else 1 - (t_p_two_tailed / 2)
         
         # Mann-Whitney U test (one-tailed)
         u_stat, u_p_two_tailed = stats.mannwhitneyu(season_2024, season_2022, alternative='two-sided')
         u_stat_one, u_p_one_tailed = stats.mannwhitneyu(season_2024, season_2022, alternative='greater')
         
-        # Effect size
+        # Calculate effect size
         pooled_std = np.sqrt(((len(season_2022) - 1) * season_2022.var() + 
                              (len(season_2024) - 1) * season_2024.var()) / 
                             (len(season_2022) + len(season_2024) - 2))
@@ -590,7 +646,7 @@ class NBAHypothesisTester:
         print(f"  Mann-Whitney U: U={u_stat_one:.0f}, p={u_p_one_tailed:.6f}")
         print(f"  Cohen's d (effect size): {cohens_d:.4f}")
         
-        # Interpretation
+        # Interpret results
         significant = t_p_one_tailed < alpha
         print(f"\nConclusion (α = {alpha}, one-tailed test):")
         if significant:
@@ -626,7 +682,7 @@ class NBAHypothesisTester:
     
     def run_all_tests(self, min_fga: int = 5, min_minutes: int = 20, alpha: float = 0.05) -> Dict:
         """
-        Run all three hypothesis tests.
+        Run all three hypothesis tests in sequence.
         
         Args:
             min_fga: Minimum field goal attempts for shooting efficiency test
@@ -639,12 +695,12 @@ class NBAHypothesisTester:
         print("RUNNING ALL NBA HYPOTHESIS TESTS")
         print("=" * 80)
         
-        # Run all tests
+        # Execute all hypothesis tests
         self.hypothesis_1_rest_days_shooting(min_fga=min_fga, alpha=alpha)
         self.hypothesis_2_home_away_scoring(alpha=alpha)
         self.hypothesis_3_three_point_evolution(min_minutes=min_minutes, alpha=alpha)
         
-        # Summary
+        # Display summary of results
         print("\n" + "="*80)
         print("SUMMARY OF ALL HYPOTHESIS TESTS")
         print("="*80)
@@ -662,17 +718,20 @@ class NBAHypothesisTester:
     
     def create_visualization_plots(self, figsize: Tuple[int, int] = (15, 12)):
         """
-        Create visualizations for all hypothesis tests.
+        Create comprehensive visualizations for all hypothesis tests.
+        
+        Creates box plots and distributions to visualize the differences
+        tested in each hypothesis.
         
         Args:
-            figsize: Figure size for the plots
+            figsize: Figure size for the plot grid
         """
         fig, axes = plt.subplots(2, 3, figsize=figsize)
         fig.suptitle('NBA Hypothesis Testing Results', fontsize=16, fontweight='bold')
         
-        # Plot 1: Rest Days vs FG%
+        # Plot 1: Rest Days vs FG% (Hypothesis 1)
         if 'hypothesis_1' in self.results:
-            # Check for feature engineered columns
+            # Check for appropriate columns
             if 'sufficient_rest' in self.player_stats.columns:
                 valid_data = self.player_stats[
                     (self.player_stats['fga'] >= 5) &
@@ -710,7 +769,7 @@ class NBAHypothesisTester:
                 axes[0, 0].text(0.5, 0.5, 'No Data Available', ha='center', va='center', transform=axes[0, 0].transAxes)
                 axes[0, 0].set_title('Shooting Efficiency by Rest Days')
         
-        # Plot 2: Home vs Away Points
+        # Plot 2: Home vs Away Points (Hypothesis 2)
         if 'hypothesis_2' in self.results:
             valid_data = self.player_stats[
                 (self.player_stats['pts'].notna()) &
@@ -732,9 +791,9 @@ class NBAHypothesisTester:
                 axes[0, 1].text(0.5, 0.5, 'No Data Available', ha='center', va='center', transform=axes[0, 1].transAxes)
                 axes[0, 1].set_title('Points Scored: Home vs Away')
         
-        # Plot 3: 3PA Evolution
+        # Plot 3: 3PA Evolution (Hypothesis 3)
         if 'hypothesis_3' in self.results:
-            # Look for 3PA per 36 column
+            # Find 3PA per 36 column
             fg3a_per_36_col = None
             for col in ['fg3a_per_36min', 'fg3a_per_36', 'fg3a_per_36_minutes']:
                 if col in self.player_stats.columns:
@@ -742,7 +801,7 @@ class NBAHypothesisTester:
                     break
             
             if fg3a_per_36_col:
-                # Look for minutes column for filtering
+                # Find minutes column for filtering
                 minutes_col = None
                 for col in ['minutes_played', 'minutes_numeric']:
                     if col in self.player_stats.columns:
@@ -768,7 +827,6 @@ class NBAHypothesisTester:
                         valid_data[valid_data['game_season'] == 2024][fg3a_per_36_col]
                     ]
                     
-                    # Only plot if both groups have data
                     if len(fg3a_groups[0]) > 0 and len(fg3a_groups[1]) > 0:
                         axes[0, 2].boxplot(fg3a_groups, labels=season_groups)
                         axes[0, 2].set_title('3PA per 36 Minutes: Season Comparison')
@@ -836,10 +894,11 @@ class NBAHypothesisTester:
             axes[1, 2].set_title('Points Distribution by Season')
         
         plt.tight_layout()
+        plt.savefig("../outputs/visuals/reporting_results/hypothesis_testing_results.png", dpi=300, bbox_inches='tight', transparent=True)
         plt.show()
 
 
-# Example usage function
+# Convenience function for easy execution
 def run_nba_hypothesis_tests(player_stats_df: pd.DataFrame, games_df: pd.DataFrame = None):
     """
     Convenience function to run all NBA hypothesis tests.
@@ -849,21 +908,21 @@ def run_nba_hypothesis_tests(player_stats_df: pd.DataFrame, games_df: pd.DataFra
         games_df: Optional DataFrame with game details
         
     Returns:
-        Dictionary with all test results
+        Tuple of (results dictionary, tester object)
     """
-    # Initialize the tester
+    # Initialize the hypothesis tester
     tester = NBAHypothesisTester(player_stats_df, games_df)
     
-    # Run all tests
+    # Execute all tests
     results = tester.run_all_tests()
     
-    # Create visualizations
+    # Generate visualizations
     tester.create_visualization_plots()
     
     return results, tester
 
 
-# Integration function for feature engineered data
+# Function for feature engineered data integration
 def run_hypothesis_tests_with_feature_engineering(raw_data_df: pd.DataFrame, feature_engineering_func=None) -> Tuple[Dict, Any]:
     """
     Run hypothesis tests on feature engineered data.
@@ -893,7 +952,7 @@ def run_hypothesis_tests_with_feature_engineering(raw_data_df: pd.DataFrame, fea
     return results, tester
 
 
-# Additional utility functions for data validation and preparation
+# Data validation utilities
 def validate_data_for_testing(player_stats_df: pd.DataFrame) -> Dict[str, bool]:
     """
     Validate that the DataFrame has the required columns for hypothesis testing.
@@ -904,7 +963,7 @@ def validate_data_for_testing(player_stats_df: pd.DataFrame) -> Dict[str, bool]:
     Returns:
         Dictionary indicating which tests can be run
     """
-    # Check for both raw and feature engineered column names
+    # Define required columns for each test (both raw and engineered versions)
     required_columns = {
         'hypothesis_1': {
             'raw': ['player_id', 'game_date', 'fga', 'fg_pct'],
@@ -923,19 +982,19 @@ def validate_data_for_testing(player_stats_df: pd.DataFrame) -> Dict[str, bool]:
     validation_results = {}
     
     for test_name, col_sets in required_columns.items():
-        # Check if engineered columns exist
+        # Check if either engineered or raw columns exist
         engineered_missing = [col for col in col_sets['engineered'] if col not in player_stats_df.columns]
         raw_missing = [col for col in col_sets['raw'] if col not in player_stats_df.columns]
         
         if len(engineered_missing) == 0:
             validation_results[test_name] = True
-            print(f"✓ {test_name}: Ready (feature engineered)")
+            print(f"READY {test_name}: Ready (feature engineered)")
         elif len(raw_missing) == 0:
             validation_results[test_name] = True
-            print(f"✓ {test_name}: Ready (can create from raw data)")
+            print(f"READY {test_name}: Ready (can create from raw data)")
         else:
             validation_results[test_name] = False
-            print(f"✗ {test_name}: Missing columns. Raw missing: {raw_missing}, Engineered missing: {engineered_missing}")
+            print(f"MISSING {test_name}: Missing columns. Raw missing: {raw_missing}, Engineered missing: {engineered_missing}")
     
     return validation_results
 
@@ -961,7 +1020,7 @@ def generate_hypothesis_report(results: Dict, output_file: str = None) -> str:
         report.append(f"\nHYPOTHESIS {i}: {result['hypothesis'].upper()}")
         report.append("-" * 50)
         
-        # Sample information
+        # Sample size information
         sample_info = result['sample_sizes']
         report.append(f"Sample Sizes:")
         for group, size in sample_info.items():
@@ -1005,7 +1064,7 @@ def generate_hypothesis_report(results: Dict, output_file: str = None) -> str:
         
         report.append(f"  Effect size interpretation: {effect_size}")
         
-        # NBA Value/Practical Significance
+        # NBA Value and Practical Significance
         report.append(f"\nNBA Value & Practical Significance:")
         
         if key == 'hypothesis_1':
@@ -1053,7 +1112,7 @@ def generate_hypothesis_report(results: Dict, output_file: str = None) -> str:
         for key, result in results.items():
             if result['significant']:
                 hypothesis_num = list(results.keys()).index(key) + 1
-                report.append(f"  • Hypothesis {hypothesis_num}: {result['hypothesis']}")
+                report.append(f"  Hypothesis {hypothesis_num}: {result['hypothesis']}")
     
     report.append(f"\nMethodological Notes:")
     report.append(f"\tAll tests used α = {list(results.values())[0]['alpha']} significance level")
@@ -1072,13 +1131,19 @@ def generate_hypothesis_report(results: Dict, output_file: str = None) -> str:
     return report_text
 
 
-# Load clean NBA data and run hypothesis tests:
+# Example data loading and testing function
 def load_and_test_nba_data():
+    """
+    Example function to load NBA data and run hypothesis tests.
+    
+    This function demonstrates the typical workflow for loading data
+    and executing the hypothesis testing pipeline.
+    """
     try:
         # Load player stats data
-        player_stats = pd.read_parquet('data/processed/cleaned_player_stats_20250526_221650.parquet')
+        player_stats = pd.read_parquet('data/processed/cleaned_player_stats.parquet')
         
-        # Load games data (optional but helpful for additional context)
+        # Optionally load games data for additional context
         try:
             games_data = pd.read_parquet('data/raw/games_data_seasons_2021_2022_2023_2024_sdk.parquet')
         except:
@@ -1115,10 +1180,8 @@ def load_and_test_nba_data():
         return None, None
 
 
-# If running this script directly
+# Main execution
 if __name__ == "__main__":
-    #df = pd.read_parquet('data/processed/cleaned_player_stats_20250526_221650.parquet')
-    #tester = NBAHypothesisTester(df)
-    #results = tester.run_all_tests()
-    #tester.create_visualization_plots()
-    load_and_test_nba_data()
+    # Example usage - uncomment to run
+    # load_and_test_nba_data()
+    pass

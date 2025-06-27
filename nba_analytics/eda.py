@@ -1,19 +1,7 @@
-# ====================================================================================================
-# ADDITIONAL ENHANCEMENTS (2025 UPDATES):
-# - CorrelationAnalyzer now flags correlations with target variables.
-# - EDAVisualizer includes optional scatter plot matrix and PCA summaries.
-# - run_complete_eda can export summaries as markdown/CSV.
-# - Outlier detection allows column-specific thresholds.
-# - Insight narratives are generated for storytelling.
-# - New diagnostic: target-feature scatter plots.
-# - Placeholder for unit test hooks.
-# ====================================================================================================
-
 """
 NBA Player Performance EDA Module
 
-A comprehensive exploratory data analysis module for NBA player performance prediction
-following 2025 data science best practices.
+A comprehensive exploratory data analysis module for NBA player performance data.
 
 Author: Christopher Bratkovics
 Created: 2025
@@ -33,43 +21,44 @@ from scipy import stats
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-# Configure logging
+# Configure logging for consistent output formatting
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Suppress warnings for cleaner output
+# Suppress warnings for cleaner console output during analysis
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 
 @dataclass
 class EDAConfig:
-    """Configuration class for EDA parameters and settings."""
+    """Configuration settings for exploratory data analysis parameters and visualization options."""
     
-    # Plot styling
+    # Plot styling configuration for consistent visualizations
     plot_style: str = 'seaborn-v0_8-whitegrid'
     color_palette: str = 'husl'
     figure_dpi: int = 300
     save_format: str = 'png'
     
-    # Analysis parameters
+    # Statistical analysis thresholds and parameters
     target_variables: List[str] = None
     correlation_threshold: float = 0.8
-    missing_data_threshold: float = 5.0  # Percentage
-    outlier_method: str = 'iqr'  # 'iqr' or 'zscore'
+    missing_data_threshold: float = 5.0  # Percentage threshold for critical missing data
+    outlier_method: str = 'iqr'  # Options: 'iqr' or 'zscore'
     outlier_threshold: float = 3.0
     
-    # File paths
+    # File paths for saving outputs
     viz_dir: str = "../outputs/visuals/EDA"
     report_dir: str = "../outputs/reports"
     
     def __post_init__(self):
+        # Initialize default target variables if not provided
         if self.target_variables is None:
             self.target_variables = ['pts', 'reb', 'ast']
 
 
 class BaseEDAAnalyzer(ABC):
-    """Abstract base class for EDA analyzers."""
+    """Abstract base class providing common functionality for all EDA analyzers."""
     
     def __init__(self, config: EDAConfig):
         self.config = config
@@ -77,29 +66,33 @@ class BaseEDAAnalyzer(ABC):
     
     @abstractmethod
     def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Perform the analysis and return results."""
+        """
+        Perform the analysis and return results.
+        
+        Each analyzer must implement this method to perform its specific analysis.
+        """
         pass
     
     def _setup_plotting(self):
-        """Setup consistent plotting style."""
+        """Configure matplotlib and seaborn for consistent visualization styling."""
         plt.style.use(self.config.plot_style)
         sns.set_palette(self.config.color_palette)
 
 
 class DataQualityAnalyzer(BaseEDAAnalyzer):
-    """Analyzer for data quality assessment including missing values and data types."""
+    """Analyzer for comprehensive data quality assessment including missing values, data types, and duplicates."""
     
     def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Perform comprehensive data quality analysis.
+        Perform comprehensive data quality analysis to identify potential issues.
         
         Args:
             df: DataFrame to analyze
             
         Returns:
-            Dict containing data quality metrics
+            Dict containing detailed data quality metrics and recommendations
         """
-        logger.info("Performing data quality analysis...")
+        logger.info("Performing comprehensive data quality analysis...")
         
         results = {
             'shape': df.shape,
@@ -110,13 +103,13 @@ class DataQualityAnalyzer(BaseEDAAnalyzer):
             'recommendations': []
         }
         
-        # Generate recommendations
+        # Generate actionable recommendations based on analysis results
         results['recommendations'] = self._generate_quality_recommendations(results, df)
         
         return results
     
     def _analyze_missing_data(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze missing data patterns."""
+        """Analyze patterns and severity of missing data across all columns."""
         missing_counts = df.isnull().sum()
         missing_pct = (missing_counts / len(df) * 100).round(2)
         
@@ -129,7 +122,7 @@ class DataQualityAnalyzer(BaseEDAAnalyzer):
         }
     
     def _analyze_data_types(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze data types distribution."""
+        """Analyze distribution of data types to ensure proper column typing."""
         dtype_counts = df.dtypes.value_counts()
         
         return {
@@ -140,10 +133,10 @@ class DataQualityAnalyzer(BaseEDAAnalyzer):
         }
     
     def _analyze_duplicates(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze duplicate records."""
+        """Identify duplicate records that may affect analysis integrity."""
         total_duplicates = df.duplicated().sum()
         
-        # Check for player-game duplicates if columns exist
+        # Check for player-game duplicates which are critical in sports data
         player_game_duplicates = 0
         if all(col in df.columns for col in ['player_id', 'game_id']):
             player_game_duplicates = df.duplicated(subset=['player_id', 'game_id']).sum()
@@ -155,19 +148,19 @@ class DataQualityAnalyzer(BaseEDAAnalyzer):
         }
     
     def _generate_quality_recommendations(self, results: Dict[str, Any], df: pd.DataFrame) -> List[str]:
-        """Generate actionable recommendations based on data quality analysis."""
+        """Generate actionable recommendations based on data quality analysis findings."""
         recommendations = []
         
-        # Missing data recommendations
+        # Recommendations for missing data issues
         critical_missing = results['missing_data']['critical_missing']
         if critical_missing:
             recommendations.append(f"ADDRESS: {len(critical_missing)} columns have >{self.config.missing_data_threshold}% missing data")
         
-        # Duplicate recommendations
+        # Recommendations for duplicate records
         if results['duplicates']['total_duplicates'] > 0:
             recommendations.append(f"CLEAN: Remove {results['duplicates']['total_duplicates']} duplicate records")
         
-        # Memory optimization
+        # Memory optimization recommendation for large datasets
         if results['memory_usage_mb'] > 100:
             recommendations.append("OPTIMIZE: Consider data type optimization for large dataset")
         
@@ -175,19 +168,19 @@ class DataQualityAnalyzer(BaseEDAAnalyzer):
 
 
 class TargetVariableAnalyzer(BaseEDAAnalyzer):
-    """Analyzer for target variables (points, rebounds, assists)."""
+    """Analyzer for in-depth analysis of target variables (points, rebounds, assists)."""
     
     def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Analyze target variable distributions and statistics.
+        Analyze target variable distributions, statistics, and relationships.
         
         Args:
             df: DataFrame to analyze
             
         Returns:
-            Dict containing target variable analysis
+            Dict containing comprehensive target variable analysis
         """
-        logger.info("Analyzing target variables...")
+        logger.info("Analyzing target variable distributions and characteristics...")
         
         results = {
             'available_targets': [],
@@ -202,14 +195,14 @@ class TargetVariableAnalyzer(BaseEDAAnalyzer):
                 results['target_statistics'][target] = self._calculate_target_stats(df[target])
                 results['distribution_analysis'][target] = self._analyze_distribution(df[target])
                 
-                # Position analysis if position column exists
+                # Analyze target variables by player position if available
                 if 'player_position' in df.columns:
                     results['position_analysis'][target] = self._analyze_by_position(df, target)
         
         return results
     
     def _calculate_target_stats(self, series: pd.Series) -> Dict[str, float]:
-        """Calculate comprehensive statistics for a target variable."""
+        """Calculate comprehensive descriptive statistics for a target variable."""
         return {
             'count': int(series.count()),
             'mean': float(series.mean()),
@@ -225,8 +218,8 @@ class TargetVariableAnalyzer(BaseEDAAnalyzer):
         }
     
     def _analyze_distribution(self, series: pd.Series) -> Dict[str, Any]:
-        """Analyze distribution characteristics."""
-        # Normality test
+        """Analyze statistical distribution characteristics for modeling suitability."""
+        # Test for normality using appropriate statistical test
         if len(series.dropna()) > 3:
             _, normality_p = stats.normaltest(series.dropna()) if len(series.dropna()) > 8 else (np.nan, np.nan)
         else:
@@ -239,7 +232,7 @@ class TargetVariableAnalyzer(BaseEDAAnalyzer):
         }
     
     def _classify_distribution(self, series: pd.Series) -> str:
-        """Classify the distribution type based on skewness."""
+        """Classify the distribution type based on statistical skewness."""
         skew = stats.skew(series.dropna())
         if abs(skew) < 0.5:
             return 'approximately_normal'
@@ -249,7 +242,7 @@ class TargetVariableAnalyzer(BaseEDAAnalyzer):
             return 'left_skewed'
     
     def _analyze_by_position(self, df: pd.DataFrame, target: str) -> Dict[str, Any]:
-        """Analyze target variable by player position."""
+        """Analyze how target variables vary by player position."""
         position_stats = df.groupby('player_position')[target].agg([
             'count', 'mean', 'median', 'std'
         ]).round(2)
@@ -261,33 +254,33 @@ class TargetVariableAnalyzer(BaseEDAAnalyzer):
 
 
 class CorrelationAnalyzer(BaseEDAAnalyzer):
-    """Analyzer for correlation patterns and multicollinearity detection."""
+    """Analyzer for identifying correlation patterns and multicollinearity issues."""
     
     def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Perform correlation analysis for modeling preparation.
+        Perform correlation analysis to identify relationships and multicollinearity.
         
         Args:
             df: DataFrame to analyze
             
         Returns:
-            Dict containing correlation analysis results
+            Dict containing correlation matrix and multicollinearity assessment
         """
-        logger.info("Performing correlation analysis...")
+        logger.info("Performing correlation analysis for feature relationships...")
         
-        # Select numeric columns, excluding ID columns
+        # Select numeric columns while excluding ID columns that don't provide predictive value
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         exclude_cols = [col for col in numeric_cols if 'id' in col.lower()]
         model_cols = [col for col in numeric_cols if col not in exclude_cols]
         
         if len(model_cols) <= 1:
-            logger.warning("Insufficient numeric columns for correlation analysis")
+            logger.warning("Insufficient numeric columns for meaningful correlation analysis")
             return {'error': 'Insufficient numeric columns'}
         
-        # Calculate correlation matrix
+        # Calculate comprehensive correlation matrix
         corr_matrix = df[model_cols].corr()
         
-        # Find high correlation pairs
+        # Identify pairs with high correlation that may cause multicollinearity
         high_corr_pairs = self._find_high_correlations(corr_matrix)
         
         return {
@@ -299,7 +292,7 @@ class CorrelationAnalyzer(BaseEDAAnalyzer):
         }
     
     def _find_high_correlations(self, corr_matrix: pd.DataFrame) -> List[Tuple[str, str, float]]:
-        """Find pairs of variables with high correlation."""
+        """Identify feature pairs with correlation above threshold."""
         high_corr_pairs = []
         
         for i in range(len(corr_matrix.columns)):
@@ -315,8 +308,8 @@ class CorrelationAnalyzer(BaseEDAAnalyzer):
         return high_corr_pairs
     
     def _summarize_correlations(self, corr_matrix: pd.DataFrame) -> Dict[str, Any]:
-        """Summarize correlation patterns."""
-        # Flatten correlation matrix (excluding diagonal)
+        """Generate summary statistics for correlation patterns."""
+        # Extract unique correlation values (excluding diagonal)
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
         correlations = corr_matrix.mask(mask).stack().dropna()
         
@@ -329,19 +322,19 @@ class CorrelationAnalyzer(BaseEDAAnalyzer):
 
 
 class OutlierAnalyzer(BaseEDAAnalyzer):
-    """Analyzer for outlier detection and analysis."""
+    """Analyzer for systematic outlier detection and characterization."""
     
     def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Detect and analyze outliers in target variables.
+        Detect and analyze outliers in target variables using statistical methods.
         
         Args:
             df: DataFrame to analyze
             
         Returns:
-            Dict containing outlier analysis results
+            Dict containing outlier detection results and flags
         """
-        logger.info("Detecting outliers...")
+        logger.info("Detecting statistical outliers in target variables...")
         
         results = {
             'outlier_summary': {},
@@ -361,7 +354,7 @@ class OutlierAnalyzer(BaseEDAAnalyzer):
         return results
     
     def _detect_outliers(self, series: pd.Series) -> pd.Series:
-        """Detect outliers using specified method."""
+        """Apply configured outlier detection method to identify anomalous values."""
         if self.config.outlier_method == 'iqr':
             return self._iqr_outliers(series)
         elif self.config.outlier_method == 'zscore':
@@ -370,7 +363,7 @@ class OutlierAnalyzer(BaseEDAAnalyzer):
             raise ValueError(f"Unknown outlier method: {self.config.outlier_method}")
     
     def _iqr_outliers(self, series: pd.Series) -> pd.Series:
-        """Detect outliers using IQR method."""
+        """Detect outliers using Interquartile Range (IQR) method."""
         Q1 = series.quantile(0.25)
         Q3 = series.quantile(0.75)
         IQR = Q3 - Q1
@@ -380,7 +373,7 @@ class OutlierAnalyzer(BaseEDAAnalyzer):
         return (series < lower_bound) | (series > upper_bound)
     
     def _zscore_outliers(self, series: pd.Series) -> pd.Series:
-        """Detect outliers using Z-score method."""
+        """Detect outliers using Z-score statistical method."""
         z_scores = np.abs(stats.zscore(series.dropna()))
         return pd.Series([False] * len(series), index=series.index).where(
             series.isna(), z_scores > self.config.outlier_threshold
@@ -388,23 +381,23 @@ class OutlierAnalyzer(BaseEDAAnalyzer):
 
 
 class EDAVisualizer:
-    """Class for creating EDA visualizations."""
+    """Class for creating publication-quality EDA visualizations."""
     
     def __init__(self, config: EDAConfig):
         self.config = config
         self._setup_plotting()
     
     def _setup_plotting(self):
-        """Setup consistent plotting style."""
+        """Configure matplotlib and seaborn for professional visualizations."""
         plt.style.use(self.config.plot_style)
         sns.set_palette(self.config.color_palette)
     
     def create_target_distribution_plots(self, df: pd.DataFrame, save: bool = False) -> plt.Figure:
-        """Create comprehensive target variable distribution plots."""
+        """Create comprehensive distribution plots for target variables."""
         n_targets = len([t for t in self.config.target_variables if t in df.columns])
         
         if n_targets == 0:
-            logger.warning("No target variables found in DataFrame")
+            logger.warning("No target variables found in DataFrame for visualization")
             return None
         
         fig, axes = plt.subplots(2, n_targets, figsize=(6*n_targets, 12))
@@ -413,14 +406,14 @@ class EDAVisualizer:
         
         for i, target in enumerate(self.config.target_variables):
             if target in df.columns:
-                # Distribution plot
+                # Create distribution plot with kernel density estimate
                 sns.histplot(data=df, x=target, kde=True, ax=axes[0, i])
                 axes[0, i].set_title(f'{target.upper()} Distribution')
                 axes[0, i].axvline(df[target].mean(), color='red', linestyle='--', alpha=0.8, label='Mean')
                 axes[0, i].axvline(df[target].median(), color='darkred', linestyle='-', alpha=0.8, label='Median')
                 axes[0, i].legend()
                 
-                # Box plot by position (if available)
+                # Create box plot by position if position data is available
                 if 'player_position' in df.columns:
                     sns.boxplot(data=df, x='player_position', y=target, ax=axes[1, i])
                     axes[1, i].set_title(f'{target.upper()} by Position')
@@ -438,19 +431,19 @@ class EDAVisualizer:
         return fig
     
     def create_correlation_heatmap(self, correlation_results: Dict[str, Any], save: bool = False) -> plt.Figure:
-        """Create correlation matrix heatmap."""
+        """Create correlation matrix heatmap for feature relationships."""
         if 'error' in correlation_results:
-            logger.warning("Cannot create correlation heatmap: insufficient data")
+            logger.warning("Cannot create correlation heatmap due to insufficient data")
             return None
         
         corr_matrix = correlation_results['correlation_matrix']
         
         fig, ax = plt.subplots(figsize=(12, 10))
         
-        # Create mask for upper triangle
+        # Create mask for upper triangle to avoid redundancy
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
         
-        # Create heatmap
+        # Create annotated heatmap with custom colormap
         sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm', 
                    center=0, fmt='.2f', linewidths=0.5, ax=ax)
         
@@ -463,11 +456,11 @@ class EDAVisualizer:
         return fig
     
     def create_missing_data_plot(self, quality_results: Dict[str, Any], save: bool = False) -> plt.Figure:
-        """Create missing data visualization."""
+        """Create visualization of missing data patterns."""
         missing_data = quality_results['missing_data']
         missing_pct = pd.Series(missing_data['missing_percentages'])
         
-        # Only plot columns with missing data
+        # Only visualize columns with missing data
         missing_cols = missing_pct[missing_pct > 0]
         
         if len(missing_cols) == 0:
@@ -481,7 +474,7 @@ class EDAVisualizer:
             ax.set_title('Missing Data Percentage by Column')
             ax.set_xlabel('Missing Data Percentage (%)')
             
-            # Add threshold line
+            # Add critical threshold line for reference
             ax.axvline(self.config.missing_data_threshold, color='red', 
                       linestyle='--', alpha=0.7, label=f'Threshold ({self.config.missing_data_threshold}%)')
             ax.legend()
@@ -494,11 +487,11 @@ class EDAVisualizer:
         return fig
     
     def create_outlier_plots(self, df: pd.DataFrame, outlier_results: Dict[str, Any], save: bool = False) -> plt.Figure:
-        """Create outlier visualization plots."""
+        """Create outlier visualization plots for target variables."""
         n_targets = len([t for t in self.config.target_variables if t in df.columns])
         
         if n_targets == 0:
-            logger.warning("No target variables found for outlier plotting")
+            logger.warning("No target variables found for outlier visualization")
             return None
         
         fig, axes = plt.subplots(1, n_targets, figsize=(6*n_targets, 6))
@@ -511,13 +504,13 @@ class EDAVisualizer:
                 if outlier_flag in outlier_results['outlier_flags']:
                     outliers = outlier_results['outlier_flags'][outlier_flag]
                     
-                    # Box plot with outliers highlighted
+                    # Create box plot with outlier statistics
                     bp = axes[i].boxplot(df[target], patch_artist=True)
                     axes[i].set_title(f'{target.upper()} - Outlier Detection\n'
                                     f'{outliers.sum()} outliers ({outliers.sum()/len(df)*100:.1f}%)')
                     axes[i].set_ylabel(target.capitalize())
                     
-                    # Color the box
+                    # Style the box plot
                     bp['boxes'][0].set_facecolor('lightblue')
                     bp['boxes'][0].set_alpha(0.7)
         
@@ -529,24 +522,24 @@ class EDAVisualizer:
         return fig
     
     def _save_plot(self, fig: plt.Figure, name: str):
-        """Save plot to file."""
+        """Save plot to file with configured settings."""
         os.makedirs(self.config.viz_dir, exist_ok=True)
         filepath = os.path.join(self.config.viz_dir, f'{name}.{self.config.save_format}')
         fig.savefig(filepath, dpi=self.config.figure_dpi, bbox_inches='tight')
-        logger.info(f"Saved plot: {filepath}")
+        logger.info(f"Visualization saved: {filepath}")
 
 
 class NBAEDAOrchestrator:
     """
     Main orchestrator class for NBA EDA following 2025 best practices.
     
-    This class coordinates multiple analyzers and provides a clean interface
+    This class coordinates multiple analyzers and provides a unified interface
     for comprehensive exploratory data analysis.
     """
     
     def __init__(self, config: Optional[EDAConfig] = None):
         """
-        Initialize the EDA orchestrator.
+        Initialize the EDA orchestrator with configuration settings.
         
         Args:
             config: EDA configuration (uses default if None)
@@ -554,7 +547,7 @@ class NBAEDAOrchestrator:
         self.config = config or EDAConfig()
         self.results = {}
         
-        # Initialize analyzers
+        # Initialize all specialized analyzers
         self.analyzers = {
             'data_quality': DataQualityAnalyzer(self.config),
             'target_variables': TargetVariableAnalyzer(self.config),
@@ -562,10 +555,10 @@ class NBAEDAOrchestrator:
             'outliers': OutlierAnalyzer(self.config)
         }
         
-        # Initialize visualizer
+        # Initialize visualization engine
         self.visualizer = EDAVisualizer(self.config)
         
-        # Setup directories
+        # Ensure output directories exist
         os.makedirs(self.config.viz_dir, exist_ok=True)
         os.makedirs(self.config.report_dir, exist_ok=True)
     
@@ -574,63 +567,63 @@ class NBAEDAOrchestrator:
                         save_plots: bool = False,
                         save_report: bool = False) -> Dict[str, Any]:
         """
-        Run complete EDA analysis on NBA player performance data.
+        Execute complete EDA analysis pipeline on NBA player performance data.
         
         Args:
             df: Primary DataFrame to analyze
             df_comparison: Optional comparison DataFrame (e.g., cleaned vs raw)
-            save_plots: Whether to save visualization plots
-            save_report: Whether to save analysis report
+            save_plots: Whether to save visualization plots to disk
+            save_report: Whether to save analysis report to disk
             
         Returns:
-            Dict containing all analysis results
+            Dict containing all analysis results and insights
         """
-        logger.info("Starting comprehensive NBA EDA analysis...")
-        logger.info(f"Dataset shape: {df.shape}")
+        logger.info("Starting comprehensive NBA EDA analysis pipeline...")
+        logger.info(f"Dataset dimensions: {df.shape[0]} rows x {df.shape[1]} columns")
         
-        # Run all analyzers
+        # Execute all analyzers sequentially
         for name, analyzer in self.analyzers.items():
             try:
-                logger.info(f"Running {name} analysis...")
+                logger.info(f"Executing {name} analysis...")
                 self.results[name] = analyzer.analyze(df)
             except Exception as e:
-                logger.error(f"Error in {name} analysis: {e}")
+                logger.error(f"Error during {name} analysis: {e}")
                 self.results[name] = {'error': str(e)}
         
-        # Create visualizations
+        # Create comprehensive visualizations
         if save_plots or not save_plots:  # Always create plots, optionally save
             self._create_all_visualizations(df, save_plots)
         
-        # Generate comprehensive insights
+        # Generate actionable insights from analysis results
         self.results['insights'] = self._generate_insights()
         
-        # Generate recommendations
+        # Generate prioritized recommendations
         self.results['recommendations'] = self._generate_recommendations()
         
-        # Save report if requested
+        # Save detailed report if requested
         if save_report:
             self._save_analysis_report()
         
-        logger.info("EDA analysis complete!")
+        logger.info("EDA analysis pipeline completed successfully")
         return self.results
     
     def _create_all_visualizations(self, df: pd.DataFrame, save: bool):
-        """Create all EDA visualizations."""
-        logger.info("Creating visualizations...")
+        """Create all EDA visualizations using the visualization engine."""
+        logger.info("Creating analysis visualizations...")
         
         try:
-            # Target variable distributions
+            # Target variable distribution analysis
             self.visualizer.create_target_distribution_plots(df, save=save)
             
-            # Correlation heatmap
+            # Feature correlation heatmap
             if 'correlation' in self.results and 'error' not in self.results['correlation']:
                 self.visualizer.create_correlation_heatmap(self.results['correlation'], save=save)
             
-            # Missing data plot
+            # Missing data visualization
             if 'data_quality' in self.results:
                 self.visualizer.create_missing_data_plot(self.results['data_quality'], save=save)
             
-            # Outlier plots
+            # Outlier detection plots
             if 'outliers' in self.results:
                 self.visualizer.create_outlier_plots(df, self.results['outliers'], save=save)
                 
@@ -638,7 +631,7 @@ class NBAEDAOrchestrator:
             logger.error(f"Error creating visualizations: {e}")
     
     def _generate_insights(self) -> Dict[str, Any]:
-        """Generate key insights from all analyses."""
+        """Generate key insights from all analysis results."""
         insights = {
             'data_overview': {},
             'target_insights': {},
@@ -646,7 +639,7 @@ class NBAEDAOrchestrator:
             'modeling_insights': {}
         }
         
-        # Data overview insights
+        # Data overview insights from quality analysis
         if 'data_quality' in self.results:
             dq = self.results['data_quality']
             insights['data_overview'] = {
@@ -656,7 +649,7 @@ class NBAEDAOrchestrator:
                 'missing_data_quality': 'Good' if len(dq['missing_data']['critical_missing']) == 0 else 'Needs attention'
             }
         
-        # Target variable insights
+        # Target variable insights for modeling strategy
         if 'target_variables' in self.results:
             tv = self.results['target_variables']
             insights['target_insights'] = {
@@ -667,7 +660,7 @@ class NBAEDAOrchestrator:
                 }
             }
         
-        # Correlation insights
+        # Correlation insights for feature engineering
         if 'correlation' in self.results and 'error' not in self.results['correlation']:
             corr = self.results['correlation']
             insights['modeling_insights']['multicollinearity_risk'] = corr['multicollinearity_risk']
@@ -676,14 +669,14 @@ class NBAEDAOrchestrator:
         return insights
     
     def _generate_recommendations(self) -> List[str]:
-        """Generate actionable recommendations based on all analyses."""
+        """Generate prioritized actionable recommendations based on all analyses."""
         recommendations = []
         
         # Data quality recommendations
         if 'data_quality' in self.results:
             recommendations.extend(self.results['data_quality'].get('recommendations', []))
         
-        # Feature engineering recommendations
+        # Feature engineering recommendations based on target analysis
         if 'target_variables' in self.results:
             tv = self.results['target_variables']
             for target in tv['available_targets']:
@@ -691,12 +684,12 @@ class NBAEDAOrchestrator:
                 if stats['zero_games_pct'] > 10:
                     recommendations.append(f"CONSIDER: {target} has {stats['zero_games_pct']:.1f}% zero values - may need special handling")
         
-        # Modeling recommendations
+        # Modeling approach recommendations
         if 'correlation' in self.results and 'error' not in self.results['correlation']:
             if self.results['correlation']['multicollinearity_risk']:
                 recommendations.append("MODELING: Address multicollinearity before training models")
         
-        # Outlier recommendations
+        # Outlier handling recommendations
         if 'outliers' in self.results:
             outlier_summary = self.results['outliers']['outlier_summary']
             for target, stats in outlier_summary.items():
@@ -706,14 +699,14 @@ class NBAEDAOrchestrator:
         return recommendations
     
     def _save_analysis_report(self):
-        """Save comprehensive analysis report."""
+        """Save comprehensive analysis report to text file."""
         report_path = os.path.join(self.config.report_dir, 'eda_analysis_report.txt')
         
         with open(report_path, 'w') as f:
             f.write("NBA PLAYER PERFORMANCE EDA REPORT\n")
             f.write("=" * 50 + "\n\n")
             
-            # Data overview
+            # Write data overview section
             if 'insights' in self.results:
                 insights = self.results['insights']
                 f.write("DATA OVERVIEW\n")
@@ -722,7 +715,7 @@ class NBAEDAOrchestrator:
                     f.write(f"{key}: {value}\n")
                 f.write("\n")
             
-            # Recommendations
+            # Write recommendations section
             if 'recommendations' in self.results:
                 f.write("RECOMMENDATIONS\n")
                 f.write("-" * 20 + "\n")
@@ -732,7 +725,7 @@ class NBAEDAOrchestrator:
         logger.info(f"Analysis report saved: {report_path}")
     
     def get_analysis_summary(self) -> Dict[str, Any]:
-        """Get a concise summary of analysis results."""
+        """Get a concise summary of analysis results for quick review."""
         if not self.results:
             return {'error': 'No analysis has been run yet'}
         
@@ -747,12 +740,12 @@ class NBAEDAOrchestrator:
         return summary
 
 
-# Convenience functions for easy usage
+# Convenience functions for easy usage in notebooks and scripts
 def quick_eda(df: pd.DataFrame, 
               target_variables: Optional[List[str]] = None,
               save_plots: bool = False) -> Dict[str, Any]:
     """
-    Convenience function for quick EDA analysis.
+    Convenience function for quick EDA analysis with minimal configuration.
     
     Args:
         df: DataFrame to analyze
@@ -792,11 +785,11 @@ def compare_datasets(df_raw: pd.DataFrame,
     
     orchestrator = NBAEDAOrchestrator(config)
     
-    # Analyze both datasets
+    # Analyze both datasets independently
     raw_results = orchestrator.run_complete_eda(df_raw, save_plots=False)
     clean_results = orchestrator.run_complete_eda(df_clean, save_plots=save_plots)
     
-    # Create comparison summary
+    # Create detailed comparison summary
     comparison = {
         'raw_dataset': raw_results,
         'clean_dataset': clean_results,
@@ -808,10 +801,10 @@ def compare_datasets(df_raw: pd.DataFrame,
 
 def _create_comparison_summary(raw_results: Dict[str, Any], 
                               clean_results: Dict[str, Any]) -> Dict[str, Any]:
-    """Create summary comparing raw and clean datasets."""
+    """Create summary highlighting key differences between raw and clean datasets."""
     summary = {}
     
-    # Shape comparison
+    # Dataset shape comparison
     if 'data_quality' in raw_results and 'data_quality' in clean_results:
         raw_shape = raw_results['data_quality']['shape']
         clean_shape = clean_results['data_quality']['shape']
@@ -823,7 +816,7 @@ def _create_comparison_summary(raw_results: Dict[str, Any],
             'columns_added': clean_shape[1] - raw_shape[1]
         }
     
-    # Missing data comparison
+    # Missing data improvement analysis
     if ('data_quality' in raw_results and 'data_quality' in clean_results):
         raw_missing = raw_results['data_quality']['missing_data']['total_missing_cells']
         clean_missing = clean_results['data_quality']['missing_data']['total_missing_cells']
@@ -839,7 +832,7 @@ def _create_comparison_summary(raw_results: Dict[str, Any],
 
 def validate_for_hypothesis_testing(df: pd.DataFrame) -> Dict[str, bool]:
     """
-    Validate DataFrame for NBA hypothesis testing requirements.
+    Validate DataFrame readiness for NBA hypothesis testing requirements.
     
     Args:
         df: DataFrame to validate
@@ -856,10 +849,10 @@ def validate_for_hypothesis_testing(df: pd.DataFrame) -> Dict[str, bool]:
                                    all(col in df.columns for col in ['fg3a', 'game_season', 'min'])
     }
     
-    logger.info("Hypothesis testing validation:")
+    logger.info("Hypothesis testing validation results:")
     for test, valid in validation_results.items():
-        status = "✓" if valid else "✗"
-        logger.info(f"  {status} {test}: {'Ready' if valid else 'Missing features'}")
+        status = "READY" if valid else "MISSING FEATURES"
+        logger.info(f"  {test}: {status}")
     
     return validation_results
 
@@ -867,7 +860,7 @@ def validate_for_hypothesis_testing(df: pd.DataFrame) -> Dict[str, bool]:
 def validate_for_modeling(df: pd.DataFrame, 
                          target_variables: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Validate DataFrame for machine learning modeling readiness.
+    Validate DataFrame readiness for machine learning modeling.
     
     Args:
         df: DataFrame to validate
@@ -887,7 +880,7 @@ def validate_for_modeling(df: pd.DataFrame,
         'ready_for_modeling': True
     }
     
-    # Check overall readiness
+    # Check overall modeling readiness
     validation['ready_for_modeling'] = all([
         len(validation['targets_available']) > 0,
         validation['sufficient_samples'],
@@ -906,7 +899,7 @@ class EDAReportGenerator:
         self.config = config
     
     def generate_markdown_report(self, filepath: str = None) -> str:
-        """Generate a comprehensive markdown report."""
+        """Generate a comprehensive markdown report from analysis results."""
         if filepath is None:
             filepath = os.path.join(self.config.report_dir, 'eda_report.md')
         
@@ -919,7 +912,7 @@ class EDAReportGenerator:
         return markdown_content
     
     def _build_markdown_content(self) -> str:
-        """Build the markdown content for the report."""
+        """Build the markdown content for the comprehensive report."""
         lines = [
             "# NBA Player Performance EDA Report",
             "",
@@ -929,7 +922,7 @@ class EDAReportGenerator:
             ""
         ]
         
-        # Add data overview
+        # Add data overview section
         if 'insights' in self.results and 'data_overview' in self.results['insights']:
             overview = self.results['insights']['data_overview']
             lines.extend([
@@ -940,7 +933,7 @@ class EDAReportGenerator:
                 ""
             ])
         
-        # Add key findings
+        # Add key findings section
         lines.extend([
             "## Key Findings",
             ""
@@ -951,7 +944,7 @@ class EDAReportGenerator:
                 lines.append(f"{i}. {rec}")
             lines.append("")
         
-        # Add detailed sections
+        # Add detailed analysis sections
         lines.extend([
             "## Data Quality Analysis",
             "",
@@ -970,7 +963,7 @@ class EDAReportGenerator:
         return "\n".join(lines)
     
     def _format_data_quality_section(self) -> str:
-        """Format the data quality section."""
+        """Format the data quality analysis section for the report."""
         if 'data_quality' not in self.results:
             return "Data quality analysis not available."
         
@@ -988,12 +981,12 @@ class EDAReportGenerator:
             for col, pct in dq['missing_data']['critical_missing'].items():
                 sections.append(f"- {col}: {pct}%")
         else:
-            sections.append("✓ No critical missing data issues found")
+            sections.append("No critical missing data issues found")
         
         return "\n".join(sections)
     
     def _format_target_variables_section(self) -> str:
-        """Format the target variables section."""
+        """Format the target variables analysis section for the report."""
         if 'target_variables' not in self.results:
             return "Target variable analysis not available."
         
@@ -1004,7 +997,7 @@ class EDAReportGenerator:
             ""
         ]
         
-        # Statistics table
+        # Create statistics table
         if tv['target_statistics']:
             sections.append("| Variable | Mean | Median | Std | Min | Max |")
             sections.append("|----------|------|--------|-----|-----|-----|")
@@ -1018,7 +1011,7 @@ class EDAReportGenerator:
         return "\n".join(sections)
     
     def _format_correlation_section(self) -> str:
-        """Format the correlation analysis section."""
+        """Format the correlation analysis section for the report."""
         if 'correlation' not in self.results or 'error' in self.results['correlation']:
             return "Correlation analysis not available."
         
@@ -1038,7 +1031,7 @@ class EDAReportGenerator:
         return "\n".join(sections)
 
 
-# Factory function for easy instantiation
+# Factory function for easy instantiation with custom configuration
 def create_nba_eda_analyzer(target_variables: Optional[List[str]] = None,
                            correlation_threshold: float = 0.8,
                            missing_threshold: float = 5.0,

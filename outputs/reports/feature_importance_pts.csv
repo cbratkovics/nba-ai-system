@@ -1,0 +1,16 @@
+feature,importance,importance_type
+minutes_played,0.15684021662764996,built_in
+fga_per_min,0.15369006242943198,built_in
+sufficient_rest_x_minutes_played,0.10031575918870743,built_in
+fta_per_min,0.09038455128354109,built_in
+efficient_game,0.0815908931793442,built_in
+minutes_played_x_rest_days,0.07169409135556308,built_in
+good_shooting_game,0.06710845493879647,built_in
+fg3a_per_min,0.03754998243098138,built_in
+elite_usage,0.0363229905519354,built_in
+turnover,0.034039569632014474,built_in
+minutes_played_x_day_of_week,0.026086530700768527,built_in
+minutes_played_x_is_home_game,0.021949103078977586,built_in
+elite_scorer,0.018349014985053452,built_in
+pf,0.018319346011691016,built_in
+turnover_per_36min,0.01567172797980152,built_in

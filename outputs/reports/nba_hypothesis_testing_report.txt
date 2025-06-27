@@ -1,6 +1,6 @@
 NBA PLAYER PERFORMANCE HYPOTHESIS TESTING REPORT
 ============================================================
-Generated on: 2025-06-26 15:45:03
+Generated on: 2025-06-26 21:11:13
 
 
 HYPOTHESIS 1: REST DAYS IMPACT ON SHOOTING EFFICIENCY
@@ -85,9 +85,9 @@ Significant results: 3
 Success rate: 100.0%
 
 Key findings from significant results:
-  • Hypothesis 1: Rest Days Impact on Shooting Efficiency
-  • Hypothesis 2: Home vs. Away Performance Differentials
-  • Hypothesis 3: Evolution of 3-Point Attempt Rates
+  Hypothesis 1: Rest Days Impact on Shooting Efficiency
+  Hypothesis 2: Home vs. Away Performance Differentials
+  Hypothesis 3: Evolution of 3-Point Attempt Rates
 
 Methodological Notes:
 	All tests used α = 0.05 significance level

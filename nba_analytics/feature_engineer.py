@@ -4,9 +4,19 @@ NBA Player Performance Feature Engineering Module
 A comprehensive feature engineering module for NBA player performance prediction
 following 2025 data science best practices.
 
+This module provides advanced feature engineering capabilities including:
+- Rest days and fatigue analysis
+- Shooting efficiency metrics
+- Per-minute production rates
+- Game context indicators
+- Opponent defensive metrics
+- Elite player classification
+- Position-specific features
+- Temporal patterns and seasonality
+- Feature interactions
+
 Author: Christopher Bratkovics
 Created: 2025
-Enhanced: Added opponent metrics, elite player classification, and interaction features
 """
 
 import logging
@@ -19,24 +29,24 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-# Configure logging
+# Configure logging with appropriate format
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Suppress common warnings
+# Suppress pandas performance warnings for cleaner output
 warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
 
 
 class NBAFeatureConfig:
-    """Configuration class for NBA feature engineering parameters."""
+    """Configuration class for NBA feature engineering parameters and thresholds."""
     
-    # Core statistics for per-minute calculations
+    # Core statistics used for calculating per-minute production rates
     RATE_STATS = ['pts', 'reb', 'ast', 'stl', 'blk', 'turnover', 'fga', 'fg3a', 'fta']
     
-    # Statistics that can contribute to double-doubles/triple-doubles
+    # Statistics that can contribute to double-doubles and triple-doubles
     MILESTONE_STATS = ['pts', 'reb', 'ast', 'stl', 'blk']
     
-    # Required columns for different feature groups
+    # Required columns mapping for different feature engineering groups
     REQUIRED_COLUMNS = {
         'rest_days': ['player_id', 'game_date'],
         'shooting_efficiency': ['pts', 'fga', 'fta', 'fgm', 'fg3m'],
@@ -46,7 +56,7 @@ class NBAFeatureConfig:
         'opponent_metrics': ['team_id', 'game_home_team_id', 'game_visitor_team_id']
     }
     
-    # Thresholds for performance categories
+    # Performance thresholds based on NBA statistical analysis
     THRESHOLDS = {
         'sufficient_rest_days': 2,
         'high_scoring_game': 30,
@@ -56,24 +66,26 @@ class NBAFeatureConfig:
         'meaningful_minutes': 10,
         'elite_player_ppg': 20,
         'elite_player_mpg': 30,
-        'elite_player_usage_fga': 12,  # FGA per game
-        'elite_player_usage_combined': 15  # Combined reb + ast per game
+        'elite_player_usage_fga': 12,  # Field goal attempts per game threshold
+        'elite_player_usage_combined': 15  # Combined rebounds + assists per game threshold
     }
 
 
 class MinutesConverter:
-    """Utility class for converting NBA minutes data."""
+    """Utility class for converting NBA minutes data from various formats to decimal."""
     
     @staticmethod
     def convert_to_decimal(minutes_value: Union[str, int, float]) -> float:
         """
         Convert minutes from various formats to decimal format.
         
+        Handles formats like "30:45" (30 minutes 45 seconds) and converts to 30.75.
+        
         Args:
-            minutes_value: Minutes in string format (e.g., "30:45") or numeric
+            minutes_value: Minutes in string format (e.g., "30:45") or numeric format
             
         Returns:
-            Minutes as decimal float
+            Minutes as decimal float (e.g., 30.75 for 30 minutes 45 seconds)
         """
         if pd.isna(minutes_value) or minutes_value == '':
             return 0.0
@@ -94,7 +106,7 @@ class MinutesConverter:
 
 
 class BaseNBATransformer(BaseEstimator, TransformerMixin):
-    """Base class for NBA feature transformers following sklearn patterns."""
+    """Base class for NBA feature transformers following scikit-learn patterns."""
     
     def __init__(self, validate_input: bool = True):
         self.validate_input = validate_input
@@ -102,7 +114,19 @@ class BaseNBATransformer(BaseEstimator, TransformerMixin):
         self.n_features_in_: Optional[int] = None
     
     def _validate_input(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Validate input DataFrame."""
+        """
+        Validate input DataFrame and create a copy for processing.
+        
+        Args:
+            X: Input DataFrame to validate
+            
+        Returns:
+            Copy of validated DataFrame
+            
+        Raises:
+            TypeError: If input is not a pandas DataFrame
+            ValueError: If required columns are missing
+        """
         if not isinstance(X, pd.DataFrame):
             raise TypeError("Input must be a pandas DataFrame")
         
@@ -114,13 +138,18 @@ class BaseNBATransformer(BaseEstimator, TransformerMixin):
         return X.copy()
     
     def _store_input_info(self, X: pd.DataFrame) -> None:
-        """Store information about input features."""
+        """Store information about input features for sklearn compatibility."""
         self.feature_names_in_ = list(X.columns)
         self.n_features_in_ = len(X.columns)
 
 
 class OpponentMetricsTransformer(BaseNBATransformer):
-    """Calculate opponent defensive metrics and pace of play."""
+    """
+    Calculate opponent defensive metrics and pace of play.
+    
+    This transformer analyzes defensive capabilities of opposing teams
+    and estimates game pace to provide context for performance predictions.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -128,32 +157,41 @@ class OpponentMetricsTransformer(BaseNBATransformer):
         self.opponent_stats_cache_ = {}
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer by calculating opponent defensive metrics."""
+        """
+        Fit the transformer by calculating opponent defensive metrics.
+        
+        Analyzes historical data to compute team defensive ratings and pace metrics.
+        """
         X = self._validate_input(X)
         self._store_input_info(X)
         
         logger.info("Calculating opponent defensive metrics...")
         
-        # Calculate opponent defensive statistics
+        # Calculate and cache opponent defensive statistics
         self.opponent_stats_cache_ = self._calculate_opponent_defensive_stats(X)
         
         return self
     
     def _calculate_opponent_defensive_stats(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-        """Calculate defensive statistics for each team."""
+        """
+        Calculate defensive statistics for each team.
+        
+        Computes team-level defensive metrics including points allowed,
+        defensive field goal percentage, and pace of play estimates.
+        """
         opponent_stats = {}
         
-        # Calculate overall defensive stats per team
+        # Calculate overall team defensive statistics
         team_defense = df.groupby('team_id').agg({
-            'pts': 'mean',  # Points allowed per game (from opponent perspective)
-            'fga': 'mean',  # Field goal attempts allowed
-            'minutes_played': 'sum'  # For pace calculation
+            'pts': 'mean',  # Average points allowed per game
+            'fga': 'mean',  # Average field goal attempts allowed
+            'minutes_played': 'sum'  # Total minutes for pace calculation
         }).reset_index()
         
         team_defense.columns = ['team_id', 'pts_allowed_avg', 'fga_allowed_avg', 'total_minutes']
         
-        # Calculate pace (possessions per game estimate)
-        # Simple pace estimation: (FGA + 0.4 * FTA + TO) per game
+        # Estimate pace of play using possessions per game formula
+        # Formula: (FGA + 0.4 * FTA + TO) per game
         if all(col in df.columns for col in ['fga', 'fta', 'turnover']):
             pace_stats = df.groupby('team_id').agg({
                 'fga': 'mean',
@@ -173,7 +211,7 @@ class OpponentMetricsTransformer(BaseNBATransformer):
         
         opponent_stats['team_defense'] = team_defense
         
-        # Calculate position-specific defensive ratings
+        # Calculate position-specific defensive ratings if position data available
         if 'player_position' in df.columns:
             position_defense = df.groupby(['team_id', 'player_position']).agg({
                 'pts': 'mean',
@@ -191,19 +229,19 @@ class OpponentMetricsTransformer(BaseNBATransformer):
         return opponent_stats
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Add opponent metrics to the dataset."""
+        """Add opponent metrics features to the dataset."""
         X = self._validate_input(X)
         
-        logger.info("Adding opponent metrics...")
+        logger.info("Adding opponent metrics to feature set...")
         
-        # Identify opponent team for each game
+        # Identify opponent team for each game record
         X['opponent_team_id'] = X.apply(self._get_opponent_team_id, axis=1)
         
-        # Merge opponent defensive stats
+        # Merge team-level opponent defensive statistics
         if 'team_defense' in self.opponent_stats_cache_:
             team_defense = self.opponent_stats_cache_['team_defense']
             
-            # Rename columns for merging as opponent stats
+            # Rename columns to indicate opponent statistics
             opponent_defense = team_defense.copy()
             opponent_defense.columns = [
                 'opponent_team_id' if col == 'team_id' else f'opponent_{col}'
@@ -212,11 +250,11 @@ class OpponentMetricsTransformer(BaseNBATransformer):
             
             X = X.merge(opponent_defense, on='opponent_team_id', how='left')
         
-        # Merge position-specific opponent stats
+        # Merge position-specific opponent statistics if available
         if 'position_defense' in self.opponent_stats_cache_ and 'player_position' in X.columns:
             position_defense = self.opponent_stats_cache_['position_defense']
             
-            # Rename for opponent perspective
+            # Rename columns for opponent perspective
             opponent_pos_defense = position_defense.copy()
             opponent_pos_defense.columns = [
                 'opponent_team_id' if col == 'team_id' else 
@@ -241,12 +279,12 @@ class OpponentMetricsTransformer(BaseNBATransformer):
         return X
     
     def _get_opponent_team_id(self, row) -> int:
-        """Determine the opponent team ID for a given game."""
+        """Determine the opponent team ID for a given game record."""
         player_team = row['team_id']
         home_team = row['game_home_team_id']
         visitor_team = row['game_visitor_team_id']
         
-        # Opponent is the other team in the game
+        # Return the other team in the game as opponent
         if player_team == home_team:
             return visitor_team
         else:
@@ -254,7 +292,12 @@ class OpponentMetricsTransformer(BaseNBATransformer):
 
 
 class ElitePlayerTransformer(BaseNBATransformer):
-    """Create elite player classification features."""
+    """
+    Create elite player classification features.
+    
+    Identifies elite players based on multiple performance criteria including
+    scoring, minutes played, and overall usage rates.
+    """
     
     def __init__(self, 
                  ppg_threshold: float = NBAFeatureConfig.THRESHOLDS['elite_player_ppg'],
@@ -270,13 +313,17 @@ class ElitePlayerTransformer(BaseNBATransformer):
         self.player_classifications_ = {}
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit by calculating player season averages for classification."""
+        """
+        Fit by calculating player season averages for elite classification.
+        
+        Analyzes player performance across seasons to identify elite performers.
+        """
         X = self._validate_input(X)
         self._store_input_info(X)
         
         logger.info("Calculating elite player classifications...")
         
-        # Calculate player season averages
+        # Calculate season-level player statistics
         player_stats = X.groupby(['player_id', 'game_season']).agg({
             'pts': 'mean',
             'minutes_played': 'mean',
@@ -285,7 +332,7 @@ class ElitePlayerTransformer(BaseNBATransformer):
             'ast': 'mean'
         }).reset_index()
         
-        # Apply elite player criteria
+        # Apply elite player criteria based on thresholds
         player_stats['elite_scorer'] = player_stats['pts'] >= self.ppg_threshold
         player_stats['elite_minutes'] = player_stats['minutes_played'] >= self.mpg_threshold
         player_stats['elite_usage'] = (
@@ -293,7 +340,7 @@ class ElitePlayerTransformer(BaseNBATransformer):
             ((player_stats['reb'] + player_stats['ast']) >= self.usage_combined_threshold)
         )
         
-        # Overall elite classification (meet at least 2 of 3 criteria)
+        # Overall elite classification requires meeting at least 2 of 3 criteria
         elite_criteria_count = (
             player_stats['elite_scorer'].astype(int) + 
             player_stats['elite_minutes'].astype(int) + 
@@ -302,7 +349,7 @@ class ElitePlayerTransformer(BaseNBATransformer):
         
         player_stats['is_elite_player'] = elite_criteria_count >= 2
         
-        # Store classifications
+        # Store classifications for transformation
         self.player_classifications_ = player_stats[
             ['player_id', 'game_season', 'is_elite_player', 'elite_scorer', 
              'elite_minutes', 'elite_usage']
@@ -315,19 +362,19 @@ class ElitePlayerTransformer(BaseNBATransformer):
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Add elite player classification features."""
+        """Add elite player classification features to each game record."""
         X = self._validate_input(X)
         
-        logger.info("Adding elite player classifications...")
+        logger.info("Adding elite player classification features...")
         
-        # Merge player classifications
+        # Merge player classifications with game data
         X = X.merge(
             self.player_classifications_,
             on=['player_id', 'game_season'],
             how='left'
         )
         
-        # Fill missing classifications as non-elite
+        # Fill missing classifications as non-elite (conservative approach)
         elite_cols = ['is_elite_player', 'elite_scorer', 'elite_minutes', 'elite_usage']
         for col in elite_cols:
             if col in X.columns:
@@ -337,7 +384,12 @@ class ElitePlayerTransformer(BaseNBATransformer):
 
 
 class InteractionFeaturesTransformer(BaseNBATransformer):
-    """Create interaction features between important variables."""
+    """
+    Create interaction features between important variables.
+    
+    Generates multiplicative interactions between key features that may
+    have non-linear relationships with performance outcomes.
+    """
     
     def __init__(self, max_interactions: int = 8, **kwargs):
         super().__init__(**kwargs)
@@ -345,17 +397,18 @@ class InteractionFeaturesTransformer(BaseNBATransformer):
         self.created_features_ = []
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer (no-op for interactions)."""
+        """Fit the transformer (no-op for interaction features)."""
         X = self._validate_input(X)
         self._store_input_info(X)
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create interaction features."""
+        """Create interaction features between selected variables."""
         X = self._validate_input(X)
         
         logger.info("Creating interaction features...")
         
+        # Define meaningful interaction pairs based on basketball domain knowledge
         interactions = [
             ('minutes_played', 'rest_days'), 
             ('minutes_played', 'is_home_game'),
@@ -393,21 +446,26 @@ class InteractionFeaturesTransformer(BaseNBATransformer):
 
 
 class PositionSpecificTransformer(BaseNBATransformer):
-    """Create position-specific features."""
+    """
+    Create position-specific features.
+    
+    Generates features that compare individual performance to position averages,
+    helping models understand position-relative performance.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.position_stats_ = {}
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit by calculating position averages."""
+        """Calculate position-specific average statistics."""
         X = self._validate_input(X)
         self._store_input_info(X)
         
         if 'player_position' in X.columns:
             logger.info("Calculating position-specific statistics...")
             
-            # Calculate position averages for key stats
+            # Calculate average statistics by position
             stats_cols = ['minutes_played', 'pts', 'reb', 'ast', 'fga']
             available_stats = [col for col in stats_cols if col in X.columns]
             
@@ -417,22 +475,22 @@ class PositionSpecificTransformer(BaseNBATransformer):
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create position-specific features."""
+        """Create features comparing individual performance to position averages."""
         X = self._validate_input(X)
         
         if 'player_position' in X.columns and len(self.position_stats_) > 0:
-            logger.info("Creating position-specific features...")
+            logger.info("Creating position-specific comparison features...")
             
-            # Add position vs average comparisons
+            # Add position average and ratio features
             for stat in self.position_stats_.columns:
                 if stat in X.columns:
-                    # Map position averages
+                    # Map position averages to each player
                     position_avg_col = f'{stat}_position_avg'
                     X[position_avg_col] = X['player_position'].map(
                         self.position_stats_[stat]
                     )
                     
-                    # Calculate ratio vs position average
+                    # Calculate ratio of individual performance to position average
                     ratio_col = f'{stat}_vs_position_avg'
                     X[ratio_col] = X[stat] / (X[position_avg_col] + 1e-6)
         
@@ -440,7 +498,12 @@ class PositionSpecificTransformer(BaseNBATransformer):
 
 
 class TemporalFeaturesTransformer(BaseNBATransformer):
-    """Enhanced temporal features."""
+    """
+    Enhanced temporal features for capturing time-based patterns.
+    
+    Creates features related to game timing, seasonality, and progression
+    through the NBA season.
+    """
     
     def __init__(self, date_col: str = 'game_date', **kwargs):
         super().__init__(**kwargs)
@@ -453,28 +516,29 @@ class TemporalFeaturesTransformer(BaseNBATransformer):
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create enhanced temporal features."""
+        """Create temporal features from game date information."""
         X = self._validate_input(X)
         
         if self.date_col in X.columns:
             logger.info("Creating enhanced temporal features...")
             
+            # Ensure date column is datetime type
             if not pd.api.types.is_datetime64_any_dtype(X[self.date_col]):
                 X[self.date_col] = pd.to_datetime(X[self.date_col])
             
-            # Basic temporal features
+            # Extract basic temporal features
             X['day_of_week'] = X[self.date_col].dt.dayofweek
             X['month'] = X[self.date_col].dt.month
             X['is_weekend'] = X['day_of_week'].isin([5, 6]).astype(int)
             
-            # Season progression features
+            # Calculate season progression features
             if 'game_season' in X.columns:
                 X['days_since_season_start'] = (
                     X[self.date_col] - 
                     X.groupby('game_season')[self.date_col].transform('min')
                 ).dt.days
                 
-                # Season phase indicators
+                # Create season phase indicators
                 X['early_season'] = X['days_since_season_start'] <= 30
                 X['mid_season'] = (
                     (X['days_since_season_start'] > 30) & 
@@ -485,9 +549,13 @@ class TemporalFeaturesTransformer(BaseNBATransformer):
         return X
 
 
-# Enhanced main classes
 class RestDaysTransformer(BaseNBATransformer):
-    """Transform rest days between games for each player."""
+    """
+    Transform rest days between games for each player.
+    
+    Calculates the number of rest days between consecutive games and creates
+    related features for fatigue and recovery analysis.
+    """
     
     def __init__(self, 
                  sufficient_rest_threshold: int = NBAFeatureConfig.THRESHOLDS['sufficient_rest_days'],
@@ -499,33 +567,33 @@ class RestDaysTransformer(BaseNBATransformer):
         self.required_columns_ = NBAFeatureConfig.REQUIRED_COLUMNS['rest_days']
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer (no-op for rest days)."""
+        """Fit the transformer (no-op for rest days calculation)."""
         X = self._validate_input(X)
         self._store_input_info(X)
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Calculate rest days and related features."""
+        """Calculate rest days between games and create related features."""
         X = self._validate_input(X)
         
         logger.info("Calculating rest days between games...")
         
-        # Ensure game_date is datetime
+        # Ensure game_date is datetime type
         if not pd.api.types.is_datetime64_any_dtype(X['game_date']):
             X['game_date'] = pd.to_datetime(X['game_date'])
         
-        # Sort by player and date
+        # Sort by player and date for proper calculation
         X = X.sort_values(['player_id', 'game_date']).reset_index(drop=True)
         
-        # Calculate rest days
+        # Calculate rest days as difference between consecutive games
         X['previous_game_date'] = X.groupby('player_id')['game_date'].shift(1)
         X['rest_days'] = (X['game_date'] - X['previous_game_date']).dt.days
         
-        # Handle first games
+        # Handle first games of season (no previous game)
         first_game_mask = X['previous_game_date'].isna()
         X.loc[first_game_mask, 'rest_days'] = self.default_first_game_rest
         
-        # Create categorical features
+        # Create categorical rest days features
         X['rest_days_category'] = pd.cut(
             X['rest_days'],
             bins=[-np.inf, 1, 2, 4, np.inf],
@@ -533,21 +601,28 @@ class RestDaysTransformer(BaseNBATransformer):
             include_lowest=True
         )
         
-        # Binary indicators
+        # Create binary indicators for common rest scenarios
         X['sufficient_rest'] = X['rest_days'] >= self.sufficient_rest_threshold
         X['is_back_to_back'] = X['rest_days'] == 1
         X['is_first_game'] = first_game_mask
         
-        # Clean up
+        # Clean up temporary column
         X = X.drop('previous_game_date', axis=1)
         
-        logger.info(f"Rest days distribution:\n{X['rest_days'].value_counts().sort_index().head(10)}")
+        # Log rest days distribution for monitoring
+        rest_distribution = X['rest_days'].value_counts().sort_index().head(10)
+        logger.info(f"Rest days distribution (top 10):\n{rest_distribution}")
         
         return X
 
 
 class ShootingEfficiencyTransformer(BaseNBATransformer):
-    """Calculate advanced shooting efficiency metrics."""
+    """
+    Calculate advanced shooting efficiency metrics.
+    
+    Creates features like True Shooting Percentage and Effective Field Goal
+    Percentage that better capture shooting efficiency than raw percentages.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -565,12 +640,14 @@ class ShootingEfficiencyTransformer(BaseNBATransformer):
         
         logger.info("Calculating shooting efficiency metrics...")
         
-        # True Shooting Percentage
+        # True Shooting Percentage: Points / (2 * (FGA + 0.44 * FTA))
+        # Accounts for 2-pointers, 3-pointers, and free throws
         if all(col in X.columns for col in ['pts', 'fga', 'fta']):
             denominator = 2 * (X['fga'] + 0.44 * X['fta'])
             X['true_shooting_pct'] = np.where(denominator > 0, X['pts'] / denominator, 0)
         
-        # Effective Field Goal Percentage
+        # Effective Field Goal Percentage: (FGM + 0.5 * FG3M) / FGA
+        # Adjusts for the added value of 3-pointers
         if all(col in X.columns for col in ['fgm', 'fg3m', 'fga']):
             X['effective_fg_pct'] = np.where(
                 X['fga'] > 0, 
@@ -586,7 +663,12 @@ class ShootingEfficiencyTransformer(BaseNBATransformer):
 
 
 class PerMinuteRatesTransformer(BaseNBATransformer):
-    """Calculate per-minute production rates."""
+    """
+    Calculate per-minute production rates.
+    
+    Normalizes statistics by minutes played to enable fair comparison
+    between players with different playing time.
+    """
     
     def __init__(self, 
                  stats_to_transform: Optional[List[str]] = None,
@@ -596,17 +678,17 @@ class PerMinuteRatesTransformer(BaseNBATransformer):
         self.required_columns_ = ['minutes_played'] + self.stats_to_transform
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer."""
+        """Fit the transformer and identify available statistics."""
         X = self._validate_input(X)
         self._store_input_info(X)
         
-        # Filter stats to only those present in data
+        # Filter to only statistics present in the data
         self.available_stats_ = [stat for stat in self.stats_to_transform if stat in X.columns]
         
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Calculate per-minute rates."""
+        """Calculate per-minute and per-36-minute rates for statistics."""
         X = self._validate_input(X)
         
         if 'minutes_played' not in X.columns:
@@ -616,14 +698,14 @@ class PerMinuteRatesTransformer(BaseNBATransformer):
         logger.info("Calculating per-minute production rates...")
         
         for stat in self.available_stats_:
-            # Per-minute rate
+            # Per-minute rate (raw productivity per minute)
             X[f'{stat}_per_min'] = np.where(
                 X['minutes_played'] > 0, 
                 X[stat] / X['minutes_played'], 
                 0
             )
             
-            # Per-36-minute rate (NBA standard)
+            # Per-36-minute rate (NBA standard for comparing players)
             X[f'{stat}_per_36min'] = np.where(
                 X['minutes_played'] > 0, 
                 (X[stat] / X['minutes_played']) * 36, 
@@ -634,11 +716,16 @@ class PerMinuteRatesTransformer(BaseNBATransformer):
 
 
 class GameContextTransformer(BaseNBATransformer):
-    """Create game context indicators."""
+    """
+    Create game context indicators.
+    
+    Generates features related to game circumstances such as home/away status
+    and playoff games.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.required_columns_ = []  # Will be set based on available columns
+        self.required_columns_ = []  # Dynamically determined based on available columns
     
     def fit(self, X: pd.DataFrame, y=None):
         """Fit the transformer."""
@@ -647,17 +734,17 @@ class GameContextTransformer(BaseNBATransformer):
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create game context indicators."""
+        """Create game context indicator features."""
         X = self._validate_input(X)
         
         logger.info("Creating game context indicators...")
         
-        # Home vs Away indicator
+        # Home vs Away game indicator
         if all(col in X.columns for col in ['team_id', 'game_home_team_id']):
             X['is_home_game'] = (X['team_id'] == X['game_home_team_id'])
             X['is_away_game'] = ~X['is_home_game']
         
-        # Playoff indicator
+        # Playoff game indicator
         if 'game_postseason' in X.columns:
             X['is_playoff_game'] = X['game_postseason'].fillna(False)
         
@@ -665,7 +752,12 @@ class GameContextTransformer(BaseNBATransformer):
 
 
 class PerformanceMilestonesTransformer(BaseNBATransformer):
-    """Create performance milestone indicators."""
+    """
+    Create performance milestone indicators.
+    
+    Identifies significant performance achievements like double-doubles,
+    triple-doubles, and high-scoring games.
+    """
     
     def __init__(self, 
                  milestone_stats: Optional[List[str]] = None,
@@ -677,11 +769,11 @@ class PerformanceMilestonesTransformer(BaseNBATransformer):
         self.required_columns_ = NBAFeatureConfig.REQUIRED_COLUMNS['performance_milestones']
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer."""
+        """Fit the transformer and identify available milestone statistics."""
         X = self._validate_input(X)
         self._store_input_info(X)
         
-        # Filter stats to only those present in data
+        # Filter to only statistics present in the data
         self.available_milestone_stats_ = [
             stat for stat in self.milestone_stats if stat in X.columns
         ]
@@ -689,31 +781,31 @@ class PerformanceMilestonesTransformer(BaseNBATransformer):
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create performance milestone indicators."""
+        """Create performance milestone indicator features."""
         X = self._validate_input(X)
         
         logger.info("Creating performance milestone indicators...")
         
-        # Count double-digit stats
+        # Count statistics that reached double digits (10+)
         double_digit_matrix = pd.DataFrame()
         for stat in self.available_milestone_stats_:
             double_digit_matrix[stat] = X[stat] >= 10
         
         double_digit_count = double_digit_matrix.sum(axis=1)
         
-        # Milestone indicators
+        # Create milestone indicators
         X['double_double'] = double_digit_count >= 2
         X['triple_double'] = double_digit_count >= 3
         X['high_scoring_game'] = X['pts'] >= self.high_scoring_threshold
         
-        # Efficient game indicator
+        # Efficient game indicator (high shooting efficiency with meaningful points)
         if 'true_shooting_pct' in X.columns:
             X['efficient_game'] = (
                 (X['true_shooting_pct'] >= NBAFeatureConfig.THRESHOLDS['efficient_game_ts']) & 
                 (X['pts'] >= NBAFeatureConfig.THRESHOLDS['efficient_game_min_pts'])
             )
         
-        # Perfect free throw game
+        # Perfect free throw game indicator
         if all(col in X.columns for col in ['fta', 'ftm']):
             X['perfect_ft_game'] = (X['fta'] > 0) & (X['fta'] == X['ftm'])
         
@@ -726,6 +818,18 @@ class NBAFeatureEngineer:
     
     This class orchestrates multiple transformers to create a comprehensive
     set of features for NBA player performance prediction.
+    
+    The pipeline includes:
+    1. Rest days and fatigue analysis
+    2. Shooting efficiency metrics
+    3. Per-minute production rates
+    4. Game context indicators
+    5. Performance milestones
+    6. Opponent defensive metrics
+    7. Elite player classification
+    8. Position-specific features
+    9. Temporal patterns
+    10. Feature interactions
     """
     
     def __init__(self, 
@@ -772,9 +876,9 @@ class NBAFeatureEngineer:
         self.is_fitted_ = False
     
     def _convert_minutes_column(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Convert minutes column to decimal format."""
+        """Convert minutes column to decimal format if necessary."""
         if 'minutes_played' not in df.columns and 'min' in df.columns:
-            logger.info("Converting 'min' to 'minutes_played'...")
+            logger.info("Converting 'min' column to 'minutes_played' decimal format...")
             df['minutes_played'] = df['min'].apply(MinutesConverter.convert_to_decimal)
         elif 'minutes_played' in df.columns and df['minutes_played'].dtype == 'object':
             logger.info("Converting 'minutes_played' to decimal format...")
@@ -791,7 +895,7 @@ class NBAFeatureEngineer:
             y: Target variable (ignored)
             
         Returns:
-            self
+            self for method chaining
         """
         logger.info("Fitting Enhanced NBA Feature Engineering Pipeline...")
         
@@ -800,10 +904,12 @@ class NBAFeatureEngineer:
         
         X_work = X.copy()
         
-        # Convert minutes column
+        # Convert minutes column to standard format
         X_work = self._convert_minutes_column(X_work)
         
-        # Initialize and fit transformers in order
+        # Initialize and fit transformers in logical order
+        # Order matters: some transformers depend on features created by others
+        
         if self.include_rest_days:
             self.transformers_['rest_days'] = RestDaysTransformer()
             self.transformers_['rest_days'].fit(X_work)
@@ -875,10 +981,10 @@ class NBAFeatureEngineer:
         
         X_transformed = X.copy()
         
-        # Convert minutes column
+        # Convert minutes column to standard format
         X_transformed = self._convert_minutes_column(X_transformed)
         
-        # Apply transformers in order
+        # Apply transformers in the same order as fitting
         for transformer_name, transformer in self.transformers_.items():
             try:
                 X_transformed = transformer.transform(X_transformed)
@@ -887,8 +993,7 @@ class NBAFeatureEngineer:
                 logger.warning(f"Error applying {transformer_name} transformer: {e}")
                 continue
         
-        logger.info(f"Enhanced feature engineering complete! "
-                   f"Features: {len(X.columns)} -> {len(X_transformed.columns)}")
+        logger.info(f"Enhanced feature engineering complete! Features: {len(X.columns)} -> {len(X_transformed.columns)}")
         
         return X_transformed
     

@@ -1,12 +1,10 @@
 """
 NBA Player Performance Data Cleaning Module
 
-A comprehensive, modular data cleaning pipeline for NBA player performance data
-following 2025 data science best practices.
+A comprehensive, modular data cleaning pipeline for NBA player performance data.
 
 Author: Christopher Bratkovics
 Created: 2025
-Updated: Following sklearn-style transformers and modern Python patterns
 """
 
 import logging
@@ -23,46 +21,51 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Configure logging
+# Configure logging with INFO level for tracking pipeline progress
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Suppress common warnings
+# Suppress common warnings for cleaner output during processing
 warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
 
 
 @dataclass
 class CleaningConfig:
-    """Configuration class for data cleaning parameters."""
+    """Configuration class for data cleaning parameters.
     
-    # Validation thresholds
+    This dataclass holds all configurable thresholds and settings used
+    throughout the data cleaning pipeline, making it easy to adjust
+    cleaning behavior without modifying code.
+    """
+    
+    # Validation thresholds for game statistics
     max_minutes_per_game: float = 60.0
     max_reasonable_points: int = 100
     max_reasonable_rebounds: int = 30
     max_reasonable_assists: int = 25
     
-    # Missing value handling
+    # Missing value handling configuration
     fill_counting_stats_with_zero: bool = True
     drop_threshold_missing_pct: float = 95.0  # Drop columns missing >95% data
     
     # Outlier detection parameters
-    outlier_method: str = "iqr"  # "iqr" or "zscore"
+    outlier_method: str = "iqr"  # Options: "iqr" or "zscore"
     outlier_threshold: float = 3.0  # IQR multiplier or z-score threshold
-    outlier_action: str = "flag"  # "flag", "cap", or "remove"
+    outlier_action: str = "flag"  # Options: "flag", "cap", or "remove"
     
-    # Text cleaning
+    # Text cleaning configuration
     standardize_positions: bool = True
     create_full_names: bool = True
     
-    # Data consistency checks
+    # Data consistency and validation settings
     strict_validation: bool = True
     auto_fix_inconsistencies: bool = True
     
-    # Default values
+    # Default values for basketball-specific features
     default_first_game_rest: int = 7
     
     def __post_init__(self):
-        """Validate configuration parameters."""
+        """Validate configuration parameters after initialization."""
         if self.outlier_method not in ["iqr", "zscore"]:
             raise ValueError("outlier_method must be 'iqr' or 'zscore'")
         if self.outlier_action not in ["flag", "cap", "remove"]:
@@ -70,7 +73,11 @@ class CleaningConfig:
 
 
 class BaseNBATransformer(BaseEstimator, TransformerMixin, ABC):
-    """Abstract base class for NBA data transformers following sklearn patterns."""
+    """Abstract base class for NBA data transformers following sklearn patterns.
+    
+    This base class provides common functionality for all NBA data transformers,
+    including input validation, logging, and sklearn-compatible interfaces.
+    """
     
     def __init__(self, config: Optional[CleaningConfig] = None, verbose: bool = True):
         self.config = config or CleaningConfig()
@@ -80,12 +87,12 @@ class BaseNBATransformer(BaseEstimator, TransformerMixin, ABC):
         self.is_fitted_: bool = False
     
     def _log(self, message: str, level: str = "info"):
-        """Log messages if verbose is enabled."""
+        """Log messages if verbose mode is enabled."""
         if self.verbose:
             getattr(logger, level)(message)
     
     def _validate_input(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Validate input DataFrame."""
+        """Validate input DataFrame and ensure it meets requirements."""
         if not isinstance(X, pd.DataFrame):
             raise TypeError("Input must be a pandas DataFrame")
         
@@ -98,24 +105,24 @@ class BaseNBATransformer(BaseEstimator, TransformerMixin, ABC):
         return X.copy()
     
     def _store_input_info(self, X: pd.DataFrame) -> None:
-        """Store information about input features."""
+        """Store information about input features for sklearn compatibility."""
         self.feature_names_in_ = list(X.columns)
         self.n_features_in_ = len(X.columns)
         self.is_fitted_ = True
     
     @abstractmethod
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Implementation of the transformation logic."""
+        """Implementation of the transformation logic. Must be overridden by subclasses."""
         pass
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the transformer."""
+        """Fit the transformer to learn parameters from the data."""
         X = self._validate_input(X)
         self._store_input_info(X)
         return self
     
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Transform the input data."""
+        """Transform the input data using learned parameters."""
         if not self.is_fitted_:
             raise ValueError("Transformer must be fitted before transform")
         
@@ -123,23 +130,26 @@ class BaseNBATransformer(BaseEstimator, TransformerMixin, ABC):
         return self._transform_impl(X)
     
     def fit_transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        """Fit and transform in one step."""
+        """Fit and transform in one step for efficiency."""
         return self.fit(X, y).transform(X)
 
 
 class MinutesConverter:
-    """Utility class for converting NBA minutes data."""
+    """Utility class for converting NBA minutes data from various formats."""
     
     @staticmethod
     def convert_to_decimal(minutes_value: Union[str, int, float]) -> float:
         """
         Convert minutes from various formats to decimal format.
         
+        Handles string formats like "30:45" (30 minutes, 45 seconds) as well
+        as numeric formats. Returns 0.0 for missing or invalid values.
+        
         Args:
             minutes_value: Minutes in string format (e.g., "30:45") or numeric
             
         Returns:
-            Minutes as decimal float
+            Minutes as decimal float (e.g., 30.75 for "30:45")
             
         Examples:
             >>> MinutesConverter.convert_to_decimal("30:45")
@@ -166,12 +176,12 @@ class MinutesConverter:
 
 
 class DataTypeConverter(BaseNBATransformer):
-    """Convert data types and format columns appropriately."""
+    """Convert data types and format columns appropriately for NBA statistics."""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # Define column type mappings
+        # Define column categories for appropriate type conversion
         self.id_columns = [
             'id', 'player_id', 'player_team_id', 'team_id', 
             'game_id', 'game_home_team_id', 'game_visitor_team_id'
@@ -189,38 +199,38 @@ class DataTypeConverter(BaseNBATransformer):
         ]
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Convert data types for NBA statistics."""
+        """Convert data types for NBA statistics ensuring proper formats."""
         self._log("Converting data types...")
         
-        # Convert ID columns to integers
+        # Convert ID columns to nullable integers to handle missing values
         for col in self.id_columns:
             if col in X.columns:
                 X[col] = pd.to_numeric(X[col], errors='coerce').astype('Int64')
         
-        # Convert statistical columns to numeric
+        # Convert statistical columns to numeric, coercing errors to NaN
         for col in self.stat_columns:
             if col in X.columns:
                 X[col] = pd.to_numeric(X[col], errors='coerce')
         
-        # Handle minutes played
+        # Handle minutes played conversion from string to decimal format
         if 'min' in X.columns:
             self._log("Converting minutes to decimal format...")
             X['minutes_played'] = X['min'].apply(MinutesConverter.convert_to_decimal)
             X = X.drop('min', axis=1)
         
-        # Convert date column
+        # Convert date column to datetime for proper temporal handling
         if 'game_date' in X.columns:
             X['game_date'] = pd.to_datetime(X['game_date'], errors='coerce')
         
-        # Convert season to integer
+        # Convert season to integer (represents ending year of season)
         if 'game_season' in X.columns:
             X['game_season'] = pd.to_numeric(X['game_season'], errors='coerce').astype('Int64')
         
-        # Convert boolean columns
+        # Convert boolean columns for playoff games
         if 'game_postseason' in X.columns:
             X['game_postseason'] = X['game_postseason'].astype(bool)
         
-        # Clean text columns
+        # Clean text columns by stripping whitespace and handling missing values
         for col in self.text_columns:
             if col in X.columns:
                 X[col] = X[col].astype(str).str.strip()
@@ -230,13 +240,17 @@ class DataTypeConverter(BaseNBATransformer):
 
 
 class MissingValueHandler(BaseNBATransformer):
-    """Handle missing values with basketball-specific logic."""
+    """Handle missing values with basketball-specific logic.
+    
+    This transformer applies domain knowledge about basketball statistics
+    to appropriately handle missing values based on the context.
+    """
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Handle missing values based on basketball context."""
+        """Handle missing values based on basketball context and statistics type."""
         self._log("Handling missing values...")
         
-        # Report missing values
+        # Generate missing value report for transparency
         missing_summary = X.isnull().sum()
         missing_pct = (missing_summary / len(X)) * 100
         
@@ -247,7 +261,8 @@ class MissingValueHandler(BaseNBATransformer):
                 for col, pct in significant_missing.items():
                     self._log(f"  {col}: {missing_summary[col]} ({pct:.2f}%)")
         
-        # Handle percentage columns
+        # Handle percentage columns with basketball logic
+        # When no attempts are made, percentage should be 0, not missing
         percentage_mappings = [
             ('fg_pct', 'fga', 'fgm'),
             ('fg3_pct', 'fg3a', 'fg3m'),
@@ -256,11 +271,11 @@ class MissingValueHandler(BaseNBATransformer):
         
         for pct_col, attempt_col, made_col in percentage_mappings:
             if all(col in X.columns for col in [pct_col, attempt_col]):
-                # Set percentage to 0 when attempts = 0 and percentage is NaN
+                # Set percentage to 0 when no attempts were made
                 zero_attempts_mask = (X[attempt_col] == 0) & (X[pct_col].isna())
                 X.loc[zero_attempts_mask, pct_col] = 0.0
                 
-                # Recalculate percentages where missing but attempts > 0
+                # Recalculate percentages where missing but attempts exist
                 if made_col in X.columns:
                     missing_pct_mask = X[pct_col].isna() & (X[attempt_col] > 0)
                     if missing_pct_mask.any():
@@ -269,7 +284,7 @@ class MissingValueHandler(BaseNBATransformer):
                             X.loc[missing_pct_mask, attempt_col]
                         )
         
-        # Handle missing statistical values
+        # Handle missing statistical values based on basketball logic
         if self.config.fill_counting_stats_with_zero:
             counting_stats = [
                 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta',
@@ -284,7 +299,7 @@ class MissingValueHandler(BaseNBATransformer):
                         X[col] = X[col].fillna(0)
                         self._log(f"  Filled {filled_count} missing values in {col} with 0")
         
-        # Handle missing minutes
+        # Handle missing minutes (players who didn't play have 0 minutes)
         if 'minutes_played' in X.columns:
             X['minutes_played'] = X['minutes_played'].fillna(0)
         
@@ -292,14 +307,18 @@ class MissingValueHandler(BaseNBATransformer):
 
 
 class DataValidator(BaseNBATransformer):
-    """Validate data consistency and fix impossible values."""
+    """Validate data consistency and fix impossible values.
+    
+    This transformer checks for and optionally fixes logical inconsistencies
+    in basketball statistics based on game rules and reasonable limits.
+    """
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Validate and fix data inconsistencies."""
+        """Validate and fix data inconsistencies based on basketball rules."""
         self._log("Performing data validation...")
         validation_issues = []
         
-        # Minutes should be between 0 and max allowed
+        # Validate minutes played (maximum 60 for regulation + overtime)
         if 'minutes_played' in X.columns:
             invalid_minutes = X[X['minutes_played'] > self.config.max_minutes_per_game]
             if len(invalid_minutes) > 0:
@@ -307,7 +326,7 @@ class DataValidator(BaseNBATransformer):
                 if self.config.auto_fix_inconsistencies:
                     X.loc[X['minutes_played'] > self.config.max_minutes_per_game, 'minutes_played'] = self.config.max_minutes_per_game
         
-        # Made shots shouldn't exceed attempted shots
+        # Validate shot attempts and makes (made <= attempted)
         shot_checks = [('fgm', 'fga'), ('fg3m', 'fg3a'), ('ftm', 'fta')]
         for made_col, attempt_col in shot_checks:
             if made_col in X.columns and attempt_col in X.columns:
@@ -317,7 +336,7 @@ class DataValidator(BaseNBATransformer):
                     if self.config.auto_fix_inconsistencies:
                         X.loc[X[made_col] > X[attempt_col], made_col] = X[attempt_col]
         
-        # Total rebounds should equal offensive + defensive rebounds
+        # Validate total rebounds equals sum of offensive and defensive rebounds
         if all(col in X.columns for col in ['reb', 'oreb', 'dreb']):
             calculated_reb = X['oreb'] + X['dreb']
             reb_mismatch = X[abs(X['reb'] - calculated_reb) > 0.1]
@@ -326,7 +345,7 @@ class DataValidator(BaseNBATransformer):
                 if self.config.auto_fix_inconsistencies:
                     X['reb'] = calculated_reb
         
-        # Percentages should be between 0 and 1
+        # Validate percentages are between 0 and 1
         pct_columns = ['fg_pct', 'fg3_pct', 'ft_pct']
         for col in pct_columns:
             if col in X.columns:
@@ -336,7 +355,7 @@ class DataValidator(BaseNBATransformer):
                     if self.config.auto_fix_inconsistencies:
                         X[col] = X[col].clip(0, 1)
         
-        # Statistical sanity checks
+        # Check for extreme statistical values that may indicate data errors
         sanity_checks = [
             ('pts', self.config.max_reasonable_points),
             ('reb', self.config.max_reasonable_rebounds),
@@ -358,7 +377,11 @@ class DataValidator(BaseNBATransformer):
 
 
 class OutlierDetector(BaseNBATransformer):
-    """Detect and handle outliers in statistical data."""
+    """Detect and handle outliers in statistical data.
+    
+    This transformer identifies statistical outliers using either IQR or z-score
+    methods and can flag, cap, or remove them based on configuration.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -383,9 +406,10 @@ class OutlierDetector(BaseNBATransformer):
         return lower_bound, upper_bound
     
     def fit(self, X: pd.DataFrame, y=None):
-        """Fit the outlier detector by calculating bounds."""
+        """Fit the outlier detector by calculating bounds for each statistic."""
         X = self._validate_input(X)
         
+        # Focus on key statistical columns for outlier detection
         outlier_columns = ['pts', 'reb', 'ast', 'minutes_played', 'fga', 'fg3a']
         
         for col in outlier_columns:
@@ -396,7 +420,7 @@ class OutlierDetector(BaseNBATransformer):
         return self
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Detect and handle outliers."""
+        """Detect and handle outliers based on fitted bounds."""
         self._log(f"Detecting outliers using {self.config.outlier_method} method...")
         outlier_summary = {}
         
@@ -407,10 +431,13 @@ class OutlierDetector(BaseNBATransformer):
                 outlier_summary[col] = outlier_count
                 
                 if self.config.outlier_action == "flag":
+                    # Add a flag column to identify outliers
                     X[f'{col}_outlier_flag'] = outliers_mask
                 elif self.config.outlier_action == "cap":
+                    # Cap outliers at the bounds
                     X[col] = X[col].clip(lower_bound, upper_bound)
                 elif self.config.outlier_action == "remove":
+                    # Remove outlier records entirely
                     X = X[~outliers_mask]
         
         if self.verbose and outlier_summary:
@@ -422,11 +449,16 @@ class OutlierDetector(BaseNBATransformer):
 
 
 class TextDataCleaner(BaseNBATransformer):
-    """Clean and standardize text data."""
+    """Clean and standardize text data.
+    
+    This transformer handles text cleaning for player names, positions,
+    and team information, ensuring consistency across the dataset.
+    """
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
+        # Standard position mappings for consistency
         self.position_mapping = {
             'G': 'Guard',
             'F': 'Forward',
@@ -438,7 +470,7 @@ class TextDataCleaner(BaseNBATransformer):
         }
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Clean and standardize text data."""
+        """Clean and standardize text data for consistency."""
         self._log("Cleaning text data...")
         
         text_columns = ['player_first_name', 'player_last_name', 'player_position', 
@@ -446,12 +478,12 @@ class TextDataCleaner(BaseNBATransformer):
         
         for col in text_columns:
             if col in X.columns:
-                # Strip whitespace and standardize
+                # Strip whitespace and standardize text format
                 X[col] = X[col].astype(str).str.strip()
-                # Handle missing values in text columns
+                # Replace various representations of missing values with pandas NA
                 X[col] = X[col].replace(['nan', 'None', ''], pd.NA)
         
-        # Standardize position names
+        # Standardize position names for consistency
         if 'player_position' in X.columns and self.config.standardize_positions:
             X['player_position_standardized'] = (
                 X['player_position']
@@ -459,7 +491,7 @@ class TextDataCleaner(BaseNBATransformer):
                 .fillna(X['player_position'])
             )
         
-        # Create full player name
+        # Create full player name for easier identification
         if (self.config.create_full_names and 
             all(col in X.columns for col in ['player_first_name', 'player_last_name'])):
             X['player_full_name'] = (
@@ -471,26 +503,30 @@ class TextDataCleaner(BaseNBATransformer):
 
 
 class FinalQualityChecker(BaseNBATransformer):
-    """Perform final data quality checks and cleanup."""
+    """Perform final data quality checks and cleanup.
+    
+    This transformer performs final validation and cleanup steps to ensure
+    the dataset is ready for analysis or modeling.
+    """
     
     def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Perform final quality checks."""
+        """Perform final quality checks and cleanup operations."""
         self._log("Performing final data quality assessment...")
         
         original_length = len(X)
         
-        # Check for duplicate records
+        # Check for and remove duplicate player-game combinations
         if all(col in X.columns for col in ['player_id', 'game_id']):
             duplicate_check = X.duplicated(subset=['player_id', 'game_id']).sum()
             if duplicate_check > 0:
                 self._log(f"Found and removing {duplicate_check} duplicate player-game combinations")
                 X = X.drop_duplicates(subset=['player_id', 'game_id'])
         
-        # Sort by date and player for consistency
+        # Sort by date and player for consistent ordering
         if all(col in X.columns for col in ['game_date', 'player_id']):
             X = X.sort_values(['game_date', 'player_id']).reset_index(drop=True)
         
-        # Final missing value check
+        # Final missing value check and reporting
         final_missing = X.isnull().sum()
         critical_missing = final_missing[final_missing > 0]
         
@@ -508,29 +544,38 @@ class FinalQualityChecker(BaseNBATransformer):
 
 
 class DataQualityAnalyzer:
-    """Dedicated class for quality assessment and dashboard creation."""
+    """Dedicated class for quality assessment and dashboard creation.
+    
+    This class provides visualization and analysis tools to assess
+    the impact of data cleaning on model performance.
+    """
     
     def __init__(self, config: Optional[CleaningConfig] = None):
         self.config = config or CleaningConfig()
     
     def simulate_model_reliability(self, stage: str) -> np.ndarray:
-        """Simulate model reliability for before/after comparison"""
+        """Simulate model reliability scores for before/after comparison.
+        
+        This simulates cross-validation scores to demonstrate the impact
+        of data cleaning on model performance.
+        """
         reliability_map = {'initial': (0.71, 0.15), 'final': (0.94, 0.03)}
         mean, std = reliability_map[stage]
         return np.random.normal(mean, std, 5)
     
     def create_cleaning_dashboard(self, cleaning_report: Dict, initial_scores: np.ndarray, final_scores: np.ndarray) -> None:
-        """Create comprehensive dashboard of improvement after data cleaning"""
+        """Create comprehensive dashboard showing improvements from data cleaning."""
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         fig.suptitle('Data Processing Pipeline: Quality Improvements', fontsize=16, fontweight='bold')
         
         colors = {'before': '#e74c3c', 'after': '#27ae60', 'neutral': '#3498db'}
         
-        # Missing data comparison
+        # Calculate missing data percentages
         total_cells = cleaning_report['original_shape'][0] * cleaning_report['original_shape'][1]
         missing_before = cleaning_report['missing_values_before'] / total_cells * 100
         missing_after = cleaning_report['missing_values_after'] / total_cells * 100
         
+        # Missing data comparison chart
         axes[0,0].bar(['Before', 'After'], [missing_before, missing_after], 
                       color=[colors['before'], colors['after']])
         axes[0,0].set_title('Missing Data %')
@@ -546,7 +591,7 @@ class DataQualityAnalyzer:
         axes[0,2].bar(['Original', 'Final'], feat_data, color=[colors['neutral'], colors['after']])
         axes[0,2].set_title('Feature Count')
         
-        # CV score distributions
+        # Cross-validation score distributions
         parts = axes[1,0].violinplot([initial_scores, final_scores], positions=[1,2], showmeans=True)
         for i, pc in enumerate(parts['bodies']):
             pc.set_facecolor(colors['before'] if i==0 else colors['after'])
@@ -554,13 +599,13 @@ class DataQualityAnalyzer:
         axes[1,0].set_xticks([1,2])
         axes[1,0].set_xticklabels(['Before', 'After'])
         
-        # Data leakage prevention
+        # Data leakage prevention visualization
         safe_features = cleaning_report['cleaned_shape'][1] - 34
         axes[1,1].pie([safe_features, 34], labels=['Safe Features', 'Removed Features'],
                       colors=[colors['after'], colors['before']], autopct='%1.1f%%', startangle=90)
         axes[1,1].set_title('Data Leakage Prevention')
         
-        # Summary text
+        # Summary text with key improvements
         axes[1,2].axis('off')
         improvement = (reliability_after - reliability_before) / reliability_before * 100
         text = (f"KEY IMPROVEMENTS\n\n"
@@ -568,7 +613,8 @@ class DataQualityAnalyzer:
                 f"  - Missing Data: -{(missing_before-missing_after):.1f}%\n"
                 f"  - Features Added: +{cleaning_report['columns_added']}\n"
                 f"  - Leakage Prevention: 34 features removed")
-        axes[1,2].text(0.05, 0.95, text, transform=axes[1,2].transAxes, fontsize=11, va='top', bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
+        axes[1,2].text(0.05, 0.95, text, transform=axes[1,2].transAxes, fontsize=11, va='top', 
+                      bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
         
         plt.tight_layout()
         plt.show()
@@ -579,7 +625,8 @@ class NBADataCleaner:
     Main data cleaning pipeline for NBA player performance data.
     
     This class orchestrates multiple transformers to provide comprehensive
-    data cleaning for NBA player statistics.
+    data cleaning for NBA player statistics. It follows a modular design
+    where each transformer handles a specific aspect of data cleaning.
     """
     
     def __init__(self, 
@@ -592,7 +639,7 @@ class NBADataCleaner:
                  include_final_checks: bool = True,
                  verbose: bool = True):
         """
-        Initialize the data cleaning pipeline.
+        Initialize the data cleaning pipeline with configurable components.
         
         Args:
             config: Configuration object (uses default if None)
@@ -602,7 +649,7 @@ class NBADataCleaner:
         self.config = config or CleaningConfig()
         self.verbose = verbose
         
-        # Initialize transformers
+        # Initialize transformers based on configuration
         self.transformers = []
         
         if include_type_conversion:
@@ -628,14 +675,14 @@ class NBADataCleaner:
     
     def fit(self, X: pd.DataFrame, y=None) -> 'NBADataCleaner':
         """
-        Fit the cleaning pipeline.
+        Fit the cleaning pipeline by learning parameters from the data.
         
         Args:
             X: Input DataFrame with NBA player stats
             y: Target variable (ignored)
             
         Returns:
-            self
+            self for method chaining
         """
         if self.verbose:
             logger.info("Fitting NBA Data Cleaning Pipeline...")
@@ -664,7 +711,7 @@ class NBADataCleaner:
             X: Input DataFrame
             
         Returns:
-            Cleaned DataFrame
+            Cleaned DataFrame with all transformations applied
         """
         if not self.is_fitted_:
             raise ValueError("Pipeline must be fitted before transform")
@@ -686,7 +733,7 @@ class NBADataCleaner:
                 logger.warning(f"Error applying {name} transformer: {e}")
                 continue
         
-        # Generate cleaning report
+        # Generate comprehensive cleaning report
         self.cleaning_report_ = self._generate_cleaning_report(X, X_clean)
         
         if self.verbose:
@@ -710,7 +757,7 @@ class NBADataCleaner:
         return self.fit(X, y).transform(X)
     
     def _generate_cleaning_report(self, X_original: pd.DataFrame, X_cleaned: pd.DataFrame) -> Dict[str, Any]:
-        """Generate a comprehensive cleaning report."""
+        """Generate a comprehensive report of all cleaning operations performed."""
         return {
             'original_shape': X_original.shape,
             'cleaned_shape': X_cleaned.shape,
@@ -745,11 +792,6 @@ class NBADataCleaner:
         """
         output_path = Path(output_path)
         
-        # Add timestamp to filename if not present
-        if not any(char.isdigit() for char in output_path.stem):
-            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-            output_path = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
-        
         # Save data in specified format
         if format == "parquet":
             X_cleaned.to_parquet(output_path, index=False)
@@ -760,7 +802,7 @@ class NBADataCleaner:
         else:
             raise ValueError(f"Unsupported format: {format}")
         
-        # Save cleaning report as JSON
+        # Save cleaning report alongside data
         if self.cleaning_report_:
             report_path = output_path.parent / f"{output_path.stem}_cleaning_report.json"
             
@@ -787,7 +829,7 @@ class NBADataCleaner:
 
 
 def assess_data_quality(df: pd.DataFrame) -> Dict[str, Any]:
-    """Comprehensive data quality assessment"""
+    """Comprehensive data quality assessment for NBA statistics."""
     missing = df.isnull().sum()
     return {
         'shape': df.shape,
@@ -801,7 +843,7 @@ def assess_data_quality(df: pd.DataFrame) -> Dict[str, Any]:
 
 # Convenience functions for common use cases
 def create_basic_cleaner(strict_validation: bool = True, verbose: bool = True) -> NBADataCleaner:
-    """Create a basic NBA data cleaner with sensible defaults."""
+    """Create a basic NBA data cleaner with sensible defaults for general use."""
     config = CleaningConfig(
         strict_validation=strict_validation,
         auto_fix_inconsistencies=True,
@@ -831,7 +873,7 @@ def create_aggressive_cleaner(remove_outliers: bool = True, verbose: bool = True
 
 
 def create_minimal_cleaner(verbose: bool = True) -> NBADataCleaner:
-    """Create a minimal cleaner that only does essential cleaning."""
+    """Create a minimal cleaner that only performs essential cleaning operations."""
     config = CleaningConfig(
         strict_validation=False,
         auto_fix_inconsistencies=True,
@@ -853,13 +895,16 @@ def analyze_cleaning_impact(df_original: pd.DataFrame,
     """
     Analyze the impact of data cleaning on the dataset.
     
+    Compares original and cleaned datasets to quantify improvements in
+    data quality, missing values, and statistical properties.
+    
     Args:
         df_original: Original dataset before cleaning
         df_cleaned: Dataset after cleaning
         target_columns: Specific columns to analyze (default: ['pts', 'reb', 'ast'])
         
     Returns:
-        Dictionary containing analysis results
+        Dictionary containing detailed analysis results
     """
     if target_columns is None:
         target_columns = ['pts', 'reb', 'ast']
@@ -879,7 +924,7 @@ def analyze_cleaning_impact(df_original: pd.DataFrame,
         'target_statistics': {}
     }
     
-    # Analyze target columns
+    # Analyze changes in target column statistics
     for col in target_columns:
         if col in df_original.columns and col in df_cleaned.columns:
             analysis['target_statistics'][col] = {
@@ -900,6 +945,9 @@ def plot_cleaning_comparison(df_original: pd.DataFrame,
                            figsize: Tuple[int, int] = (15, 10)) -> None:
     """
     Create visualizations comparing data before and after cleaning.
+    
+    Generates distribution plots for specified columns showing the impact
+    of data cleaning on statistical properties.
     
     Args:
         df_original: Original dataset
@@ -933,7 +981,7 @@ def plot_cleaning_comparison(df_original: pd.DataFrame,
         axes[0, i].set_ylabel('Density')
         axes[0, i].grid(True, alpha=0.3)
         
-        # Add statistics
+        # Add statistics annotations
         mean_before = df_original[col].mean()
         std_before = df_original[col].std()
         axes[0, i].axvline(mean_before, color='darkred', linestyle='--', linewidth=2)
@@ -948,7 +996,7 @@ def plot_cleaning_comparison(df_original: pd.DataFrame,
         axes[1, i].set_ylabel('Density')
         axes[1, i].grid(True, alpha=0.3)
         
-        # Add statistics
+        # Add statistics annotations
         mean_after = df_cleaned[col].mean()
         std_after = df_cleaned[col].std()
         axes[1, i].axvline(mean_after, color='darkblue', linestyle='--', linewidth=2)
@@ -956,6 +1004,7 @@ def plot_cleaning_comparison(df_original: pd.DataFrame,
                        transform=axes[1, i].transAxes, bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     plt.tight_layout()
+    plt.savefig("../outputs/visuals/EDA/data_cleaning_impact.png", dpi=300, bbox_inches='tight', transparent=True)
     plt.show()
 
 
@@ -963,7 +1012,7 @@ def validate_cleaned_data(df: pd.DataFrame,
                          expected_columns: List[str] = None,
                          target_stats: List[str] = None) -> Dict[str, bool]:
     """
-    Validate that cleaned data meets expected criteria.
+    Validate that cleaned data meets expected criteria for NBA statistics.
     
     Args:
         df: Cleaned DataFrame
@@ -971,7 +1020,7 @@ def validate_cleaned_data(df: pd.DataFrame,
         target_stats: Target statistics to validate
         
     Returns:
-        Dictionary of validation results
+        Dictionary of validation results with pass/fail status
     """
     if target_stats is None:
         target_stats = ['pts', 'reb', 'ast']
@@ -988,11 +1037,11 @@ def validate_cleaned_data(df: pd.DataFrame,
     if missing_columns:
         logger.warning(f"Missing required columns: {missing_columns}")
     
-    # Check data types
+    # Check data types are appropriate
     if 'game_date' in df.columns:
         validation_results['date_column_is_datetime'] = pd.api.types.is_datetime64_any_dtype(df['game_date'])
     
-    # Check for reasonable data ranges
+    # Check for reasonable data ranges based on basketball rules
     validation_results['reasonable_data_ranges'] = True
     for stat in target_stats:
         if stat in df.columns:
@@ -1005,12 +1054,12 @@ def validate_cleaned_data(df: pd.DataFrame,
     missing_pct = (df.isnull().sum() / len(df) * 100).max()
     validation_results['acceptable_missing_data'] = missing_pct < 10.0
     
-    # Check for duplicates
+    # Check for duplicates in player-game combinations
     if all(col in df.columns for col in ['player_id', 'game_id']):
         duplicate_count = df.duplicated(subset=['player_id', 'game_id']).sum()
         validation_results['no_duplicates'] = duplicate_count == 0
     
-    # Overall validation
+    # Overall validation status
     validation_results['overall_valid'] = all(validation_results.values())
     
     return validation_results
@@ -1022,7 +1071,7 @@ def quick_clean_nba_data(df: pd.DataFrame,
                         save_path: Optional[Union[str, Path]] = None,
                         show_plots: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
-    Quick cleaning function for use in Jupyter notebooks.
+    Quick cleaning function for use in Jupyter notebooks with minimal configuration.
     
     Args:
         df: Input DataFrame

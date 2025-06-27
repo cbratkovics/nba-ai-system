@@ -6,7 +6,6 @@ Comprehensive implementation for predicting individual NBA player statistics
 
 Author: Christopher Bratkovics
 Created: 2025
-Fixed: Removed AdvancedFeatureEngineer dependency, added target_preprocessing, fixed syntax
 """
 
 import pandas as pd
@@ -19,7 +18,7 @@ import json
 import joblib
 from dataclasses import dataclass
 
-# Machine Learning
+# Machine Learning imports
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LinearRegression, Ridge, ElasticNet
@@ -29,17 +28,17 @@ from sklearn.feature_selection import SelectKBest, f_regression, RFE, RFECV, Var
 from sklearn.inspection import permutation_importance
 from sklearn.base import BaseEstimator, TransformerMixin
 
-# Statistical analysis
+# Statistical analysis imports
 from scipy.stats import pearsonr
 
-# Configuration
+# Global configuration
 warnings.filterwarnings('ignore')
 np.random.seed(42)
 
 
 @dataclass
 class ModelConfig:
-    """Configuration class for modeling parameters."""
+    """Configuration class for modeling parameters and hyperparameter settings."""
     test_size: float = 0.2
     validation_size: float = 0.2
     random_state: int = 42
@@ -47,12 +46,12 @@ class ModelConfig:
     max_features_for_selection: int = 25
     correlation_threshold: float = 0.95
     variance_threshold: float = 0.01
-    feature_selection_method: str = 'rfe'  # Changed from 'rfecv' to 'rfe'
+    feature_selection_method: str = 'rfe'  # Options: 'rfe', 'selectk', 'rfecv'
 
 
 @dataclass
 class ModelResults:
-    """Data class to store model results."""
+    """Data class to store model training results and performance metrics."""
     metrics: Dict[str, float]
     predictions: np.ndarray
     feature_importance: Optional[pd.DataFrame] = None
@@ -60,11 +59,16 @@ class ModelResults:
 
 
 class DataLeakageDetector:
-    """Utility class to detect and prevent data leakage."""
+    """Utility class to detect and prevent data leakage in feature sets."""
     
     @staticmethod
     def detect_target_leakage(X: pd.DataFrame, y: pd.Series, correlation_threshold: float = 0.95) -> List[str]:
-        """Detect features that are too highly correlated with target."""
+        """
+        Detect features that are too highly correlated with the target variable.
+        
+        High correlation with target may indicate data leakage or features 
+        calculated using the target variable.
+        """
         leakage_features = []
         for col in X.select_dtypes(include=[np.number]).columns:
             try:
@@ -77,8 +81,14 @@ class DataLeakageDetector:
     
     @staticmethod
     def detect_calculated_leakage_features(df_columns: List[str]) -> List[str]:
-        """Detect features that are calculated using target variables."""
+        """
+        Detect features that appear to be calculated using target variables.
+        
+        This method identifies features whose names suggest they were derived
+        from target variables (points, rebounds, assists).
+        """
         leakage_features = []
+        # Patterns that indicate features derived from target variables
         leakage_patterns = [
             'pts_per_min', 'pts_per_36', 'reb_per_min', 'reb_per_36', 'ast_per_min', 'ast_per_36',
             'pts_last_', 'pts_avg', 'reb_last_', 'reb_avg', 'ast_last_', 'ast_avg',
@@ -98,44 +108,55 @@ class DataLeakageDetector:
 
 
 class DataLoader:
-    """Robust data loading with comprehensive validation."""
+    """Handles data loading with comprehensive validation and quality checks."""
     
     def __init__(self, config: ModelConfig):
         self.config = config
         
     def load_and_validate(self, data_path: str) -> pd.DataFrame:
-        """Load data with comprehensive validation."""
-        print("Loading NBA dataset...")
+        """
+        Load data from disk and perform basic validation checks.
+        
+        Ensures data integrity and presence of required target variables.
+        """
+        print("Loading NBA player performance dataset...")
         
         try:
             df = pd.read_parquet(data_path)
-            print(f"Dataset loaded: {df.shape[0]:,} records, {df.shape[1]} features")
+            print(f"Successfully loaded dataset: {df.shape[0]:,} records with {df.shape[1]} features")
             
             self._validate_data_quality(df)
             return df
             
         except Exception as e:
-            print(f"Error loading data: {e}")
+            print(f"Error loading data from {data_path}: {e}")
             raise
     
     def _validate_data_quality(self, df: pd.DataFrame) -> None:
-        """Validate overall data quality."""
-        # Check for required target variables
+        """
+        Validate that the dataset contains required columns and basic quality metrics.
+        
+        Checks for presence of target variables and reports date range if available.
+        """
+        # Verify target variables are present
         required_targets = ['pts', 'reb', 'ast']
         missing_targets = [t for t in required_targets if t not in df.columns]
         
         if missing_targets:
-            raise ValueError(f"Missing target variables: {missing_targets}")
+            raise ValueError(f"Missing required target variables: {missing_targets}")
         
-        # Check date range if available
+        # Report temporal coverage if date column exists
         if 'game_date' in df.columns:
             df['game_date'] = pd.to_datetime(df['game_date'], errors='coerce')
             date_range = df['game_date'].max() - df['game_date'].min()
-            print(f"Date range: {date_range.days} days")
+            print(f"Dataset temporal coverage: {date_range.days} days")
 
 
 class SmartFeatureSelector:
-    """Intelligent feature selection with multiple strategies."""
+    """
+    Intelligent feature selection using multiple strategies to identify
+    the most predictive features while preventing overfitting.
+    """
     
     def __init__(self, config: ModelConfig):
         self.config = config
@@ -143,15 +164,21 @@ class SmartFeatureSelector:
         self.feature_insights_ = {}
         
     def select_features(self, X: pd.DataFrame, y: pd.Series, target_name: str) -> pd.DataFrame:
-        """Apply comprehensive feature selection."""
-        print(f"Selecting features for {target_name.upper()}...")
+        """
+        Apply comprehensive feature selection pipeline tailored for each target variable.
         
+        Combines variance filtering, correlation analysis, leakage detection,
+        and statistical selection methods.
+        """
+        print(f"\nApplying feature selection for {target_name.upper()} prediction...")
+        
+        # Sequential feature filtering pipeline
         X_filtered = self._remove_low_variance_features(X)
         X_filtered = self._remove_correlated_features(X_filtered)
         X_filtered = self._remove_leakage_features(X_filtered, y)
         X_selected = self._apply_statistical_selection(X_filtered, y, target_name)
         
-        # Store selected features and insights
+        # Store selection results and insights
         self.selected_features_[target_name] = X_selected.columns.tolist()
         self.feature_insights_[target_name] = {
             'selected_count': len(X_selected.columns),
@@ -160,15 +187,20 @@ class SmartFeatureSelector:
             'reduction_ratio': 1 - (len(X_selected.columns) / len(X.columns))
         }
         
-        print(f"Feature selection: {X.shape[1]} -> {X_selected.shape[1]} features")
+        print(f"Feature selection complete: {X.shape[1]} features reduced to {X_selected.shape[1]} features")
         return X_selected
     
     def get_feature_insights(self, target: str) -> Dict[str, Any]:
-        """Get feature selection insights for a target."""
+        """Retrieve feature selection insights for a specific target variable."""
         return self.feature_insights_.get(target, {})
     
     def _remove_low_variance_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Remove features with very low variance."""
+        """
+        Remove features with very low variance that provide minimal predictive value.
+        
+        Low variance features are often constants or near-constants that don't
+        contribute to model performance.
+        """
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) == 0:
             return X
@@ -181,27 +213,32 @@ class SmartFeatureSelector:
             selected_features = numeric_cols[selector.get_support()]
             X_filtered = X[selected_features].copy()
             
-            # Add back non-numeric columns
+            # Preserve non-numeric columns
             non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
             for col in non_numeric_cols:
                 X_filtered[col] = X[col]
             return X_filtered
         except:
-            pass
-        
-        return X
+            return X
     
     def _remove_correlated_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Remove highly correlated features."""
+        """
+        Remove highly correlated features to reduce multicollinearity.
+        
+        When two features are highly correlated, keeping both adds complexity
+        without improving predictive power.
+        """
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) <= 1:
             return X
         
+        # Calculate correlation matrix
         corr_matrix = X[numeric_cols].corr().abs()
         upper_triangle = corr_matrix.where(
             np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
         )
         
+        # Identify features to drop
         to_drop = [
             column for column in upper_triangle.columns 
             if any(upper_triangle[column] > self.config.correlation_threshold)
@@ -213,28 +250,40 @@ class SmartFeatureSelector:
         return X
     
     def _remove_leakage_features(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
-        """Detect and remove potential data leakage."""
+        """
+        Detect and remove potential data leakage features.
+        
+        Data leakage occurs when features contain information about the target
+        that wouldn't be available at prediction time.
+        """
         detector = DataLeakageDetector()
         
+        # Check for correlation-based leakage
         correlation_leakage = detector.detect_target_leakage(X, y, correlation_threshold=0.90)
+        # Check for name-based leakage patterns
         calculated_leakage = detector.detect_calculated_leakage_features(X.columns.tolist())
         
         all_leakage = list(set(correlation_leakage + calculated_leakage))
         
         if all_leakage:
-            print(f"  Removed {len(all_leakage)} potential leakage features")
+            print(f"  Identified and removed {len(all_leakage)} potential data leakage features")
             X = X.drop(columns=all_leakage, errors='ignore')
         
         return X
     
     def _apply_statistical_selection(self, X: pd.DataFrame, y: pd.Series, target_name: str) -> pd.DataFrame:
-        """Apply statistical feature selection."""
+        """
+        Apply statistical feature selection methods to identify most predictive features.
+        
+        Uses RFE (Recursive Feature Elimination) or other methods based on configuration.
+        """
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) == 0:
             return X
         
         n_features = min(self.config.max_features_for_selection, len(numeric_cols))
         
+        # Select feature selection method based on configuration
         if self.config.feature_selection_method == 'selectk':
             selector = SelectKBest(score_func=f_regression, k=n_features)
         elif self.config.feature_selection_method == 'rfe':
@@ -248,22 +297,27 @@ class SmartFeatureSelector:
             return X
         
         try:
+            # Apply feature selection
             X_numeric = X[numeric_cols].fillna(0)
             selected_mask = selector.fit(X_numeric, y).get_support()
             selected_numeric_cols = numeric_cols[selected_mask]
             
+            # Combine selected numeric features with non-numeric features
             non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
             final_cols = list(selected_numeric_cols) + list(non_numeric_cols)
             
             return X[final_cols]
             
         except Exception as e:
-            print(f"  Feature selection failed, using all features: {str(e)[:50]}...")
+            print(f"  Feature selection encountered an issue, using all features: {str(e)[:50]}...")
             return X
 
 
 class ModelPipeline:
-    """Production-ready model training pipeline."""
+    """
+    Production-ready model training pipeline with comprehensive data preparation,
+    model training, and evaluation capabilities.
+    """
     
     def __init__(self, config: ModelConfig):
         self.config = config
@@ -271,64 +325,80 @@ class ModelPipeline:
         self.scalers = {}
         self.results = {}
         self.feature_selector = SmartFeatureSelector(config)
-        self.target_preprocessing = {}  # Added missing attribute
+        self.target_preprocessing = {}
         
     def prepare_model_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, pd.Series]]:
-        """Prepare features and targets with comprehensive preprocessing."""
-        print("Preparing model data...")
+        """
+        Prepare features and targets with comprehensive preprocessing.
+        
+        Removes leakage columns, handles categorical variables, and ensures
+        data is ready for modeling.
+        """
+        print("\nPreparing data for model training...")
         
         target_vars = ['pts', 'reb', 'ast']
         
-        # Identify and remove leakage columns
+        # Define columns that would cause data leakage
         direct_leakage = [
             'fgm', 'fga', 'fg_pct', 'fg3m', 'fg3a', 'fg3_pct',
             'ftm', 'fta', 'ft_pct', 'oreb', 'dreb',
         ]
         
+        # Detect calculated leakage features
         calculated_leakage = DataLeakageDetector.detect_calculated_leakage_features(df.columns.tolist())
         
+        # Identify non-predictive identifier columns
         identifier_cols = ['game_id', 'player_id', 'game_date', 'game_season', 'team_id', 'player_team_id']
         id_cols = [col for col in df.columns if 'id' in col.lower()]
         
+        # Combine all columns to drop
         cols_to_drop = target_vars + direct_leakage + calculated_leakage + identifier_cols + id_cols
         cols_to_drop = list(set([col for col in cols_to_drop if col in df.columns]))
         
-        print(f"Removed {len(cols_to_drop)} leakage/identifier columns")
+        print(f"Identified and removing {len(cols_to_drop)} leakage/identifier columns")
         
+        # Create feature matrix and target dictionary
         X = df.drop(columns=cols_to_drop, errors='ignore')
         y = {target: df[target] for target in target_vars if target in df.columns}
         
-        # Early feature selection
+        # Apply early feature selection to manage dimensionality
         X = self._apply_early_feature_selection(X, y['pts'])
         
-        # Handle categorical variables
+        # Handle categorical variables with one-hot encoding
         categorical_cols = X.select_dtypes(include=['object', 'category']).columns
         essential_categorical = []
         
         for col in categorical_cols:
             unique_count = X[col].nunique()
-            if unique_count <= 10:
+            if unique_count <= 10:  # Only encode low-cardinality categorical variables
                 essential_categorical.append(col)
         
+        # Drop high-cardinality categorical columns
         X = X.drop(columns=[col for col in categorical_cols if col not in essential_categorical])
         
+        # Apply one-hot encoding to selected categorical columns
         if len(essential_categorical) > 0:
             X = pd.get_dummies(X, columns=essential_categorical, drop_first=True)
         
-        # Final leakage check
+        # Final leakage check for each target
         for target_name, target_series in y.items():
             high_corr_features = DataLeakageDetector.detect_target_leakage(X, target_series, correlation_threshold=0.90)
             if high_corr_features:
                 X = X.drop(columns=high_corr_features, errors='ignore')
         
+        # Fill any remaining missing values
         X = X.fillna(0)
         
-        print(f"Final dataset: {X.shape[0]:,} records, {X.shape[1]} leak-free features")
+        print(f"Data preparation complete: {X.shape[0]:,} records with {X.shape[1]} leak-free features")
         
         return X, y
     
     def _apply_early_feature_selection(self, X: pd.DataFrame, y_reference: pd.Series, max_features: int = 50) -> pd.DataFrame:
-        """Apply early feature selection before feature engineering."""
+        """
+        Apply preliminary feature selection based on correlation with target.
+        
+        This reduces computational complexity before more sophisticated selection methods.
+        """
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
         
@@ -339,6 +409,7 @@ class ModelPipeline:
             X_numeric = X[numeric_cols].fillna(0)
             correlations = []
             
+            # Calculate correlation with reference target
             for col in numeric_cols:
                 try:
                     corr = abs(X_numeric[col].corr(y_reference))
@@ -346,9 +417,11 @@ class ModelPipeline:
                 except:
                     correlations.append((col, 0))
             
+            # Select top features by correlation
             correlations.sort(key=lambda x: x[1], reverse=True)
             selected_numeric = [col for col, _ in correlations[:max_features]]
             
+            # Combine selected numeric features with non-numeric features
             final_cols = selected_numeric + list(non_numeric_cols)
             
             return X[final_cols]
@@ -357,24 +430,33 @@ class ModelPipeline:
             return X
     
     def create_time_aware_split(self, df: pd.DataFrame, X: pd.DataFrame, y: Dict[str, pd.Series]) -> Tuple:
-        """Create chronologically aware train/validation/test splits."""
-        print("Creating time-aware data splits...")
+        """
+        Create chronologically aware train/validation/test splits.
+        
+        Time-aware splitting prevents data leakage from future games influencing
+        predictions of past games.
+        """
+        print("\nCreating time-aware data splits to prevent temporal leakage...")
         
         if 'game_date' in df.columns:
+            # Sort by date to ensure chronological ordering
             df_sorted = df.sort_values('game_date')
             sorted_indices = df_sorted.index
             
+            # Calculate split points
             n_samples = len(sorted_indices)
             train_end = int(n_samples * (1 - self.config.test_size - self.config.validation_size))
             val_end = int(n_samples * (1 - self.config.test_size))
             
+            # Create chronological splits
             train_idx = sorted_indices[:train_end]
             val_idx = sorted_indices[train_end:val_end]
             test_idx = sorted_indices[val_end:]
             
-            print(f"Train: {len(train_idx):,} | Validation: {len(val_idx):,} | Test: {len(test_idx):,}")
+            print(f"Chronological split sizes - Train: {len(train_idx):,} | Validation: {len(val_idx):,} | Test: {len(test_idx):,}")
             
         else:
+            # Fallback to random split if no date column
             indices = X.index
             train_val_idx, test_idx = train_test_split(
                 indices, test_size=self.config.test_size, random_state=self.config.random_state
@@ -383,6 +465,7 @@ class ModelPipeline:
                 train_val_idx, test_size=self.config.validation_size, random_state=self.config.random_state
             )
         
+        # Create split datasets
         X_train, X_val, X_test = X.loc[train_idx], X.loc[val_idx], X.loc[test_idx]
         y_train = {target: y[target].loc[train_idx] for target in y.keys()}
         y_val = {target: y[target].loc[val_idx] for target in y.keys()}
@@ -391,7 +474,11 @@ class ModelPipeline:
         return X_train, X_val, X_test, y_train, y_val, y_test
     
     def get_optimized_models(self) -> Dict:
-        """Define optimized model configurations."""
+        """
+        Define optimized model configurations with appropriate hyperparameters.
+        
+        Each model is configured with parameters suitable for NBA player statistics prediction.
+        """
         return {
             'linear_regression': {
                 'model': LinearRegression(),
@@ -454,20 +541,26 @@ class ModelPipeline:
     
     def train_models(self, X_train: pd.DataFrame, X_val: pd.DataFrame, 
                     y_train: Dict, y_val: Dict) -> None:
-        """Train and validate models with proper hyperparameter tuning."""
-        print("Training models...")
+        """
+        Train and validate models with hyperparameter tuning for each target variable.
+        
+        Each target (points, rebounds, assists) gets its own optimized feature set
+        and model configuration.
+        """
+        print("\nInitiating model training pipeline...")
         
         model_configs = self.get_optimized_models()
         cv_strategy = TimeSeriesSplit(n_splits=3)
         
         for target in y_train.keys():
-            print(f"\nTraining {target.upper()} models:")
+            print(f"\nTraining models for {target.upper()} prediction:")
             
+            # Apply target-specific feature selection
             X_train_selected = self.feature_selector.select_features(X_train, y_train[target], target)
             selected_features = X_train_selected.columns
             X_val_selected = X_val[selected_features]
             
-            # Store target preprocessing info
+            # Store preprocessing information for deployment
             self.target_preprocessing[target] = {
                 'selected_features': selected_features.tolist(),
                 'feature_count': len(selected_features),
@@ -477,8 +570,10 @@ class ModelPipeline:
             self.models[target] = {}
             self.results[target] = {}
             
+            # Train each model type
             for model_name, config in model_configs.items():
                 try:
+                    # Apply scaling if required
                     if config['use_scaling']:
                         scaler = RobustScaler()
                         X_train_model = pd.DataFrame(
@@ -498,6 +593,7 @@ class ModelPipeline:
                     
                     # Hyperparameter tuning with efficiency optimizations
                     if config['params'] and model_name not in ['gradient_boosting', 'random_forest']:
+                        # Full grid search for simpler models
                         grid_search = GridSearchCV(
                             config['model'],
                             config['params'],
@@ -512,6 +608,7 @@ class ModelPipeline:
                         cv_score = -grid_search.best_score_
                         
                     elif model_name in ['gradient_boosting', 'random_forest']:
+                        # Simplified tuning for complex models to reduce computation time
                         if model_name == 'random_forest':
                             rf_configs = [
                                 {'n_estimators': 50, 'max_depth': 10, 'min_samples_split': 10},
@@ -522,6 +619,7 @@ class ModelPipeline:
                             best_model = None
                             best_params = {}
                             
+                            # Try each configuration
                             for rf_config in rf_configs:
                                 temp_model = RandomForestRegressor(
                                     random_state=self.config.random_state,
@@ -531,6 +629,7 @@ class ModelPipeline:
                                 )
                                 temp_model.fit(X_train_model, y_train[target])
                                 
+                                # Use OOB score if available, otherwise validate
                                 if hasattr(temp_model, 'oob_score_') and temp_model.oob_score_ is not None:
                                     oob_mae_approx = np.sqrt(1 - temp_model.oob_score_) * y_train[target].std()
                                 else:
@@ -549,12 +648,14 @@ class ModelPipeline:
                             best_model.fit(X_train_model, y_train[target])
                             best_params = {}
                             
+                            # Quick cross-validation for gradient boosting
                             cv_scores = cross_val_score(
                                 best_model, X_train_model, y_train[target],
                                 cv=TimeSeriesSplit(n_splits=2), scoring='neg_mean_absolute_error'
                             )
                             cv_score = -cv_scores.mean()
                     else:
+                        # No hyperparameter tuning needed
                         best_model = config['model']
                         best_model.fit(X_train_model, y_train[target])
                         best_params = {}
@@ -564,13 +665,16 @@ class ModelPipeline:
                         )
                         cv_score = -cv_scores.mean()
                     
+                    # Evaluate on validation set
                     y_val_pred = best_model.predict(X_val_model)
                     
+                    # Calculate performance metrics
                     val_mae = mean_absolute_error(y_val[target], y_val_pred)
                     val_rmse = np.sqrt(mean_squared_error(y_val[target], y_val_pred))
                     val_r2 = r2_score(y_val[target], y_val_pred)
                     val_mape = mean_absolute_percentage_error(y_val[target], y_val_pred) * 100
                     
+                    # Store model and results
                     self.models[target][model_name] = best_model
                     self.results[target][model_name] = ModelResults(
                         metrics={
@@ -583,17 +687,21 @@ class ModelPipeline:
                         predictions=y_val_pred
                     )
                     
-                    print(f"  {model_name}: R2={val_r2:.3f} | MAE={val_mae:.3f}")
+                    print(f"  {model_name}: R-squared = {val_r2:.3f} | Mean Absolute Error = {val_mae:.3f}")
                     
                 except Exception as e:
                     print(f"  {model_name}: Training failed - {str(e)[:50]}...")
                     continue
         
-        print("Model training complete")
+        print("\nModel training pipeline completed successfully")
 
     def evaluate_on_test(self, X_test: pd.DataFrame, y_test: Dict) -> Dict:
-        """Final evaluation on test set."""
-        print("Final test evaluation:")
+        """
+        Perform final evaluation on the held-out test set.
+        
+        This provides unbiased performance estimates for model selection.
+        """
+        print("\nPerforming final evaluation on test set:")
         
         test_results = {}
         
@@ -606,6 +714,7 @@ class ModelPipeline:
             
             for model_name, model in self.models[target].items():
                 try:
+                    # Apply scaling if necessary
                     scaler_key = f"{target}_{model_name}"
                     if scaler_key in self.scalers:
                         X_test_model = pd.DataFrame(
@@ -616,8 +725,10 @@ class ModelPipeline:
                     else:
                         X_test_model = X_test_selected
                     
+                    # Generate predictions
                     y_pred = model.predict(X_test_model)
                     
+                    # Calculate test metrics
                     mae = mean_absolute_error(y_test[target], y_pred)
                     rmse = np.sqrt(mean_squared_error(y_test[target], y_pred))
                     r2 = r2_score(y_test[target], y_pred)
@@ -635,32 +746,40 @@ class ModelPipeline:
                     print(f"  Error evaluating {model_name} for {target}: {str(e)[:50]}...")
                     continue
         
-        # Print best results for each target
-        print("\nBest model performance:")
+        # Report best performing model for each target
+        print("\nBest performing models on test set:")
         for target in test_results.keys():
-            if test_results[target]:  # Check if any models succeeded
+            if test_results[target]:
                 best_model = max(test_results[target], key=lambda x: test_results[target][x]['r2'])
                 best_metrics = test_results[target][best_model]
                 feature_count = len(self.target_preprocessing[target]['selected_features'])
                 
                 print(f"  {target.upper()}: {best_model.replace('_', ' ').title()} "
-                      f"(R2={best_metrics['r2']:.3f}, MAE={best_metrics['mae']:.2f}) "
-                      f"[{feature_count} features]")
+                      f"(R-squared = {best_metrics['r2']:.3f}, MAE = {best_metrics['mae']:.2f}) "
+                      f"using {feature_count} optimized features")
             else:
-                print(f"  {target.upper()}: No successful models")
+                print(f"  {target.upper()}: No models successfully evaluated")
         
         return test_results
 
 
 class ModelInterpreter:
-    """Advanced model interpretation and feature importance analysis."""
+    """
+    Advanced model interpretation providing feature importance analysis
+    and business insights from trained models.
+    """
     
     def __init__(self, pipeline: ModelPipeline):
         self.pipeline = pipeline
         
     def analyze_feature_importance(self, X_train: pd.DataFrame, y_train: Dict) -> Dict:
-        """Comprehensive feature importance analysis."""
-        print("Analyzing feature importance...")
+        """
+        Perform comprehensive feature importance analysis for each target and model.
+        
+        Uses built-in feature importances for tree-based models and permutation
+        importance for other model types.
+        """
+        print("\nAnalyzing feature importance for model interpretability...")
         
         importance_results = {}
         
@@ -672,6 +791,7 @@ class ModelInterpreter:
             
             for model_name, model in self.pipeline.models[target].items():
                 try:
+                    # Apply scaling if needed
                     scaler_key = f"{target}_{model_name}"
                     if scaler_key in self.pipeline.scalers:
                         X_train_model = pd.DataFrame(
@@ -682,13 +802,17 @@ class ModelInterpreter:
                     else:
                         X_train_model = X_train_selected
                     
+                    # Extract feature importances based on model type
                     if hasattr(model, 'feature_importances_'):
+                        # Tree-based models have built-in feature importances
                         importances = model.feature_importances_
                         importance_type = 'built_in'
                     elif hasattr(model, 'coef_'):
+                        # Linear models use absolute coefficient values
                         importances = np.abs(model.coef_)
                         importance_type = 'coefficients'
                     else:
+                        # Use permutation importance for other models
                         perm_importance = permutation_importance(
                             model, X_train_model, y_train[target],
                             n_repeats=5, random_state=42, n_jobs=-1
@@ -696,6 +820,7 @@ class ModelInterpreter:
                         importances = perm_importance.importances_mean
                         importance_type = 'permutation'
                     
+                    # Create feature importance DataFrame
                     feature_importance = pd.DataFrame({
                         'feature': X_train_model.columns,
                         'importance': importances,
@@ -710,8 +835,12 @@ class ModelInterpreter:
         return importance_results
     
     def create_business_insights(self, importance_results: Dict, test_results: Dict) -> Dict:
-        """Generate actionable business insights."""
-        print("Generating business insights...")
+        """
+        Generate actionable business insights from model performance and feature importance.
+        
+        Translates technical results into stakeholder-specific recommendations.
+        """
+        print("\nGenerating business insights from model results...")
         
         insights = {
             'model_performance': {},
@@ -719,8 +848,9 @@ class ModelInterpreter:
             'stakeholder_recommendations': {}
         }
         
+        # Summarize model performance
         for target in test_results.keys():
-            if test_results[target]:  # Check if any models succeeded
+            if test_results[target]:
                 best_model = max(test_results[target], key=lambda x: test_results[target][x]['r2'])
                 best_metrics = test_results[target][best_model]
                 
@@ -732,10 +862,13 @@ class ModelInterpreter:
                     'predictability': self._classify_predictability(best_metrics['r2'])
                 }
         
+        # Extract key performance drivers
         for target in importance_results.keys():
+            # Prefer Random Forest feature importances if available
             if 'random_forest' in importance_results[target]:
                 top_features = importance_results[target]['random_forest'].head(5)
             else:
+                # Use best model's feature importances
                 if target in insights['model_performance']:
                     best_model = insights['model_performance'][target]['best_model']
                     if best_model in importance_results[target]:
@@ -751,12 +884,13 @@ class ModelInterpreter:
                     'importance_scores': top_features['importance'].tolist()
                 }
         
+        # Generate stakeholder-specific recommendations
         insights['stakeholder_recommendations'] = self._generate_stakeholder_recommendations(insights)
         
         return insights
     
     def _classify_predictability(self, r2_score: float) -> str:
-        """Classify model predictability based on R2 score."""
+        """Classify model predictability level based on R-squared score."""
         if r2_score >= 0.7:
             return "High"
         elif r2_score >= 0.5:
@@ -767,7 +901,11 @@ class ModelInterpreter:
             return "Very Low"
     
     def _generate_stakeholder_recommendations(self, insights: Dict) -> Dict:
-        """Generate tailored recommendations for different stakeholders."""
+        """
+        Generate tailored recommendations for different stakeholder groups.
+        
+        Each stakeholder group receives insights relevant to their specific needs.
+        """
         return {
             'fantasy_managers': [
                 "Focus on players with consistent minutes and favorable rest patterns",
@@ -797,27 +935,38 @@ class ModelInterpreter:
 
 
 class ProductionModelManager:
-    """Manage models for production deployment."""
+    """
+    Manages trained models for production deployment including serialization
+    and prediction API creation.
+    """
     
     def __init__(self, pipeline: ModelPipeline):
         self.pipeline = pipeline
         self.deployment_models = {}
         
     def prepare_for_deployment(self, test_results: Dict) -> None:
-        """Prepare the best models for production deployment."""
-        print("Preparing production models...")
+        """
+        Prepare the best performing models for production deployment.
+        
+        Selects the best model for each target based on test set performance.
+        """
+        print("\nPreparing models for production deployment...")
         
         for target in test_results.keys():
-            if test_results[target]:  # Check if any models succeeded
+            if test_results[target]:
+                # Select best model based on R-squared score
                 best_model_name = max(test_results[target], key=lambda x: test_results[target][x]['r2'])
                 best_model = self.pipeline.models[target][best_model_name]
                 best_metrics = test_results[target][best_model_name]
                 
+                # Get associated scaler if exists
                 scaler_key = f"{target}_{best_model_name}"
                 scaler = self.pipeline.scalers.get(scaler_key, None)
                 
+                # Get selected features for this target
                 selected_features = self.pipeline.feature_selector.selected_features_[target]
                 
+                # Store deployment configuration
                 self.deployment_models[target] = {
                     'model': best_model,
                     'model_name': best_model_name,
@@ -827,7 +976,12 @@ class ProductionModelManager:
                 }
     
     def create_prediction_function(self) -> callable:
-        """Create a single function for making predictions on new data."""
+        """
+        Create a single function for making predictions on new data.
+        
+        This function handles all preprocessing and returns predictions
+        for all three targets.
+        """
         
         def predict_player_performance(player_data: Dict[str, Any]) -> Dict[str, float]:
             """
@@ -837,10 +991,12 @@ class ProductionModelManager:
                 player_data: Dictionary containing player features
                 
             Returns:
-                Dictionary with predicted points, rebounds, assists
+                Dictionary with predicted points, rebounds, and assists
             """
+            # Convert input to DataFrame
             input_df = pd.DataFrame([player_data])
             
+            # Handle categorical encoding for position if present
             for col in input_df.select_dtypes(include=['object']).columns:
                 if col.startswith('player_position'):
                     unique_positions = ['C', 'F', 'G']
@@ -850,22 +1006,27 @@ class ProductionModelManager:
             
             predictions = {}
             
+            # Generate predictions for each target
             for target, deployment_info in self.deployment_models.items():
                 try:
+                    # Ensure all required features are present
                     for feature in deployment_info['features']:
                         if feature not in input_df.columns:
                             input_df[feature] = 0
                     
+                    # Select required features
                     X_input = input_df[deployment_info['features']]
                     
+                    # Apply scaling if necessary
                     if deployment_info['scaler'] is not None:
                         X_input = pd.DataFrame(
                             deployment_info['scaler'].transform(X_input),
                             columns=X_input.columns
                         )
                     
+                    # Generate prediction
                     prediction = deployment_info['model'].predict(X_input)[0]
-                    predictions[target] = max(0, round(prediction, 1))
+                    predictions[target] = max(0, round(prediction, 1))  # Ensure non-negative
                     
                 except Exception as e:
                     predictions[target] = 0.0
@@ -876,23 +1037,31 @@ class ProductionModelManager:
 
 
     def save_production_artifacts(self, output_dir: str = "../outputs/artifacts") -> None:
-        """Save all production artifacts."""
+        """
+        Save all production artifacts including models, scalers, and metadata.
+        
+        Creates a directory structure with all necessary files for deployment.
+        """
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True, parents=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
+        # Save artifacts for each target
         for target, deployment_info in self.deployment_models.items():
             target_dir = output_path / target
             target_dir.mkdir(exist_ok=True)
             
+            # Save model
             model_file = target_dir / "model.joblib"
             joblib.dump(deployment_info['model'], model_file)
             
+            # Save scaler if exists
             if deployment_info['scaler'] is not None:
                 scaler_file = target_dir / "scaler.joblib"
                 joblib.dump(deployment_info['scaler'], scaler_file)
             
+            # Save metadata
             metadata = {
                 'model_name': deployment_info['model_name'],
                 'features': deployment_info['features'],
@@ -905,27 +1074,31 @@ class ProductionModelManager:
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2, default=str)
         
-        print(f"Production artifacts saved to {output_path}")
+        print(f"Production artifacts successfully saved to: {output_path}")
         return output_path
 
 
 def validate_model_results(test_results: Dict, min_r2_threshold: float = 0.3) -> bool:
-    """Validate that model results meet minimum performance criteria."""
+    """
+    Validate that model results meet minimum performance criteria.
+    
+    Ensures models are sufficiently accurate before deployment.
+    """
     validation_passed = True
     
-    print("Validating model performance...")
+    print("\nValidating model performance against minimum thresholds...")
     
     for target, models in test_results.items():
-        if models:  # Check if any models succeeded
+        if models:
             best_r2 = max(model_metrics['r2'] for model_metrics in models.values())
             
             if best_r2 < min_r2_threshold:
-                print(f"WARNING: {target.upper()} best R2 ({best_r2:.3f}) below threshold ({min_r2_threshold})")
+                print(f"WARNING: {target.upper()} best R-squared ({best_r2:.3f}) is below minimum threshold ({min_r2_threshold})")
                 validation_passed = False
             else:
-                print(f"PASS: {target.upper()} best R2 = {best_r2:.3f}")
+                print(f"PASSED: {target.upper()} best R-squared = {best_r2:.3f}")
         else:
-            print(f"FAIL: {target.upper()} - no successful models")
+            print(f"FAILED: {target.upper()} - no models were successfully evaluated")
             validation_passed = False
     
     return validation_passed
@@ -933,15 +1106,21 @@ def validate_model_results(test_results: Dict, min_r2_threshold: float = 0.3) ->
 
 def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict, 
                         insights: Dict, output_dir: str = "../outputs/artifacts") -> None:
-    """Save all model artifacts for future use."""
+    """
+    Save all model artifacts including pipeline, results, and insights.
+    
+    Creates a comprehensive archive of the modeling process for reproducibility.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True, parents=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    # Save complete pipeline
     pipeline_file = output_path / "nba_pipeline.joblib"
     joblib.dump(pipeline, pipeline_file)
     
+    # Save results and insights
     results_file = output_path / "model_results.joblib"
     joblib.dump({
         'test_results': test_results,
@@ -949,6 +1128,7 @@ def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict,
         'timestamp': timestamp
     }, results_file)
     
+    # Save feature lists for reference
     feature_lists = {}
     for target in pipeline.feature_selector.selected_features_:
         feature_lists[target] = pipeline.feature_selector.selected_features_[target]
@@ -957,18 +1137,21 @@ def save_model_artifacts(pipeline: ModelPipeline, test_results: Dict,
     with open(features_file, 'w') as f:
         json.dump(feature_lists, f, indent=2)
     
-    print(f"Model artifacts saved to {output_path}")
+    print(f"All model artifacts saved to: {output_path}")
 
 
 def run_nba_modeling_pipeline(data_path: str = "../data/processed/final_engineered_nba_data.parquet") -> Tuple:
     """
-    Execute the NBA modeling pipeline with target-specific optimizations.
+    Execute the complete NBA modeling pipeline with target-specific optimizations.
+    
+    This is the main entry point for training models on NBA player statistics.
     
     Returns:
         Tuple of (pipeline, test_results, insights, production_manager)
     """
-    print("NBA PLAYER PERFORMANCE MODELING PIPELINE")
+    print("NBA PLAYER PERFORMANCE PREDICTION MODELING PIPELINE")
     print("=" * 55)
+    print("Initializing comprehensive model training workflow...")
     
     # Configure model parameters
     config = ModelConfig(
@@ -976,91 +1159,92 @@ def run_nba_modeling_pipeline(data_path: str = "../data/processed/final_engineer
         validation_size=0.2,
         random_state=42,
         n_cv_folds=5,
-        max_features_for_selection=35,  # Increased for better target-specific selection
+        max_features_for_selection=35,
         correlation_threshold=0.95,
-        feature_selection_method='rfe'  # Fixed: Use 'rfe' instead of 'rfecv'
+        feature_selection_method='rfe'
     )
     
+    # Load and validate data
     loader = DataLoader(config)
     df = loader.load_and_validate(data_path)
     
-    # Run pipeline
+    # Initialize pipeline
     pipeline = ModelPipeline(config)
     
-    # Data preparation
+    # Prepare data for modeling
     X, y = pipeline.prepare_model_data(df)
     
-    # Time-aware splits
+    # Create time-aware data splits
     X_train, X_val, X_test, y_train, y_val, y_test = pipeline.create_time_aware_split(df, X, y)
     
-    # Model training with target-specific features
+    # Train models with target-specific feature selection
     pipeline.train_models(X_train, X_val, y_train, y_val)
     
-    # Evaluation
+    # Evaluate on test set
     test_results = pipeline.evaluate_on_test(X_test, y_test)
     
-    # Analysis and insights
+    # Generate insights and feature importance
     interpreter = ModelInterpreter(pipeline)
     importance_results = interpreter.analyze_feature_importance(X_train, y_train)
     insights = interpreter.create_business_insights(importance_results, test_results)
     
-    # Add insights
+    # Add preprocessing details to insights
     insights['target_preprocessing'] = pipeline.target_preprocessing
     insights['feature_selection_insights'] = {}
     for target in y.keys():
         insights['feature_selection_insights'][target] = pipeline.feature_selector.get_feature_insights(target)
     
-    # Production preparation
+    # Prepare models for production
     production_manager = ProductionModelManager(pipeline)
     production_manager.prepare_for_deployment(test_results)
     production_manager.save_production_artifacts()
     
-    print("\nPIPELINE COMPLETE")
-    print("=" * 30)
+    print("\nMODELING PIPELINE COMPLETED SUCCESSFULLY")
+    print("=" * 40)
     
-    # Print performance summary
-    print("\nTarget-Specific Feature Counts:")
+    # Display feature optimization summary
+    print("\nTarget-Specific Feature Optimization Summary:")
     for target in y.keys():
         if target in pipeline.target_preprocessing:
             feature_count = len(pipeline.target_preprocessing[target]['selected_features'])
-            print(f"  {target.upper()}: {feature_count} optimized features")
+            print(f"  {target.upper()}: {feature_count} optimized features selected")
     
     return pipeline, test_results, insights, production_manager
 
 
 if __name__ == "__main__":
-    """Execute the model pipeline."""
+    """Execute the complete modeling pipeline when run as main script."""
     
     try:
-        # Run modeling pipeline
+        # Run the complete modeling pipeline
         pipeline, test_results, insights, production_manager = run_nba_modeling_pipeline()
         
-        # Validation
+        # Validate results meet minimum performance criteria
         validation_passed = validate_model_results(test_results, min_r2_threshold=0.3)
         
-        # Save artifacts
+        # Save all artifacts for future use
         save_model_artifacts(pipeline, test_results, insights)
         
-        # Performance summary
-        print("\nPERFORMANCE SUMMARY:")
+        # Display final performance summary
+        print("\nFINAL MODEL PERFORMANCE SUMMARY:")
+        print("-" * 40)
         for target, performance in insights['model_performance'].items():
             if target in insights['target_preprocessing']:
                 feature_count = len(insights['target_preprocessing'][target]['selected_features'])
-                print(f"  {target.upper()}: {performance['best_model'].replace('_', ' ').title()} "
-                      f"(R2={performance['r2']:.3f}, MAE={performance['mae']:.2f}) "
+                print(f"{target.upper()}: {performance['best_model'].replace('_', ' ').title()} "
+                      f"(R-squared = {performance['r2']:.3f}, MAE = {performance['mae']:.2f}) "
                       f"using {feature_count} optimized features")
         
-        # Feature insights
+        # Display feature selection insights
         print("\nFEATURE SELECTION INSIGHTS:")
+        print("-" * 40)
         for target in insights['feature_selection_insights'].keys():
             target_insights = insights['feature_selection_insights'][target]
-            print(f"  {target.upper()}: {target_insights['selected_count']} features selected")
+            print(f"{target.upper()}: Selected {target_insights['selected_count']} features "
+                  f"from {target_insights['original_count']} original features "
+                  f"({target_insights['reduction_ratio']*100:.1f}% reduction)")
         
-        print(f"\nExpected improvements:")
-        print(f"  - Better feature selection per target")
-        print(f"  - Reduced overfitting through leakage prevention") 
-        print(f"  - Target-specific optimization")
-        print(f"  - Improved model reliability")
+        print("\nPipeline execution completed successfully!")
         
     except Exception as e:
         print(f"Pipeline execution error: {e}")
