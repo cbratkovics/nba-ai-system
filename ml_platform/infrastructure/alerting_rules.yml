@@ -1,0 +1,266 @@
+# NBA Analytics ML Platform Alerting Rules
+groups:
+  - name: ml_platform_alerts
+    rules:
+      # High error rate alerts
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: ml-platform
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} requests per second for {{ $labels.job }}"
+
+      # Model performance degradation
+      - alert: ModelPerformanceDegradation
+        expr: ml_model_accuracy{metric_type="mae"} > 2.0
+        for: 10m
+        labels:
+          severity: warning
+          team: ml-engineering
+        annotations:
+          summary: "Model performance degraded"
+          description: "Model {{ $labels.model_name }} has MAE of {{ $value }}, exceeding threshold"
+
+      # Feature drift detected
+      - alert: FeatureDriftDetected
+        expr: ml_data_drift_score > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          team: ml-engineering
+        annotations:
+          summary: "Feature drift detected"
+          description: "Feature {{ $labels.feature_name }} has drift score {{ $value }}"
+
+      # High prediction latency
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(ml_prediction_latency_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          team: ml-platform
+        annotations:
+          summary: "High prediction latency"
+          description: "95th percentile latency is {{ $value }}s for {{ $labels.model_name }}"
+
+      # API rate limit exceeded
+      - alert: APIRateLimitExceeded
+        expr: rate(api_usage_by_customer[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          team: api-platform
+        annotations:
+          summary: "Customer exceeding rate limits"
+          description: "Customer {{ $labels.customer_id }} is making {{ $value }} requests per second"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: rate(feature_cache_hits_total[5m]) / (rate(feature_cache_hits_total[5m]) + rate(feature_cache_misses_total[5m])) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value }} for {{ $labels.feature }}"
+
+  - name: infrastructure_alerts
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
+        for: 15m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Disk space low"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }} for {{ $labels.mountpoint }}"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.job }} service is down on {{ $labels.instance }}"
+
+      # High container restart rate
+      - alert: HighContainerRestartRate
+        expr: rate(container_start_time_seconds[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High container restart rate"
+          description: "Container {{ $labels.name }} is restarting frequently"
+
+  - name: database_alerts
+    rules:
+      # PostgreSQL connection limit
+      - alert: PostgreSQLConnectionLimit
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "PostgreSQL connection limit approaching"
+          description: "PostgreSQL is using {{ $value }}% of max connections"
+
+      # Redis memory usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_config_maxmemory > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis is using {{ $value }}% of available memory"
+
+      # Database query performance
+      - alert: SlowDatabaseQueries
+        expr: pg_stat_statements_mean_time_ms > 1000
+        for: 15m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}ms"
+
+  - name: kafka_alerts
+    rules:
+      # Kafka consumer lag
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_lag_sum > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: streaming
+        annotations:
+          summary: "Kafka consumer lag high"
+          description: "Consumer lag is {{ $value }} messages for {{ $labels.topic }}"
+
+      # Kafka partition offline
+      - alert: KafkaPartitionOffline
+        expr: kafka_topic_partition_leader == -1
+        for: 5m
+        labels:
+          severity: critical
+          team: streaming
+        annotations:
+          summary: "Kafka partition offline"
+          description: "Partition {{ $labels.partition }} of topic {{ $labels.topic }} is offline"
+
+      # High Kafka disk usage
+      - alert: KafkaHighDiskUsage
+        expr: kafka_log_size_bytes / kafka_log_max_size_bytes > 0.8
+        for: 15m
+        labels:
+          severity: warning
+          team: streaming
+        annotations:
+          summary: "Kafka disk usage high"
+          description: "Kafka log disk usage is {{ $value }}% for topic {{ $labels.topic }}"
+
+  - name: business_alerts
+    rules:
+      # Revenue drop
+      - alert: RevenueDrop
+        expr: decrease(revenue_metrics[1h]) < -1000
+        for: 30m
+        labels:
+          severity: critical
+          team: business
+        annotations:
+          summary: "Revenue drop detected"
+          description: "Revenue has dropped by ${{ $value }} in the last hour"
+
+      # Customer churn spike
+      - alert: CustomerChurnSpike
+        expr: rate(billing_events_total{event_type="subscription_canceled"}[1h]) > 5
+        for: 15m
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "Customer churn spike"
+          description: "{{ $value }} customers canceled subscriptions in the last hour"
+
+      # API usage anomaly
+      - alert: APIUsageAnomaly
+        expr: rate(graphql_requests_total[5m]) > 1000 or rate(graphql_requests_total[5m]) < 10
+        for: 10m
+        labels:
+          severity: warning
+          team: api-platform
+        annotations:
+          summary: "API usage anomaly"
+          description: "API request rate is {{ $value }} requests per second, which is unusual"
+
+  - name: security_alerts
+    rules:
+      # High authentication failure rate
+      - alert: HighAuthFailureRate
+        expr: rate(auth_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} authentication failures per second"
+
+      # Suspicious API usage pattern
+      - alert: SuspiciousAPIUsage
+        expr: rate(api_usage_by_customer[1m]) > 500
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Suspicious API usage pattern"
+          description: "Customer {{ $labels.customer_id }} is making {{ $value }} requests per second"
+
+      # SSL certificate expiring
+      - alert: SSLCertificateExpiring
+        expr: ssl_certificate_expiry_days < 30
+        for: 1h
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
